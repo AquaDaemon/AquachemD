@@ -8,7 +8,9 @@
 </div>
 
 <p align="center">
-  <img src="https://aquadaemon.org/images/aquachemd.png" width="120" alt="AquachemD">
+  <a href="https://aquadaemon.org/aquachemd/">
+    <img src="https://aquadaemon.org/images/inline/aquachemd.png" width="120" alt="AquachemD">
+  </a>
 </p>
 
 <h1 align="center">AquachemD</h1>
