@@ -585,6 +585,11 @@ void action_web_request(struct mg_connection *nc, struct mg_http_message *http_m
 
   int len = mg_url_decode(http_msg->uri.buf, http_msg->uri.len, buf, 50, 0);
 
+  struct mg_str *source = mg_http_get_header(http_msg, "X-AquachemD-Source");
+  if (source != NULL && mg_strcmp(*source, mg_str("cron")) == 0) {
+    // Request came from the cron
+  }
+
   if (strncmp(http_msg->uri.buf, "/api/", 4) == 0)
   {
     switch (action_URI(&buf[5], len - 5, value, false, &msg)){

@@ -39,9 +39,9 @@ Then you can start adding devices, hit the `edit config` button to bring up the 
 # Errors
 AquachemD uses systemd for a startup, you can look at error / start / stop using one of the below commands.
 ```
-sudo systemctl status aqualinkd
-sudo systemctl stop aqualinkd
-sudo systemctl start aqualinkd
+sudo systemctl status aquachemd
+sudo systemctl stop aquachemd
+sudo systemctl start aquachemd
 ```
 
 You can manually edit the config file `/etc/aquachemd.conf` using your favorite editor.

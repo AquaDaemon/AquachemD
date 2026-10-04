@@ -145,6 +145,45 @@ void LOG_STARTUP_EVENT()
                 NULL);
 }
 
+/*************** 
+ * Increase the verboseness of what's recorded.
+ * 
+DOSE DECISION
+Pump: Acid
+Sensor: pH
+Reading: 7.72
+Average: 7.70
+Target: 7.70
+Table range: >= 7.70
+Requested: 10 sec
+Maximum: 60 sec
+Flow rate: 2.18 ml/sec
+Estimated dose: 21.8 ml
+
+Safety:
+  Filter pump: OK
+  Flow cell: OK
+  Tank: OK
+  Global interlock: OK
+
+Decision: ALLOWED
+
+-----
+
+DOSE SKIPPED
+Pump: Acid
+Reason: FILTER_PUMP_NOT_RUNNING
+
+-----
+
+DOSE SKIPPED
+Reason: MAX_PERIOD_VOLUME_REACHED
+Current: 482 ml
+Limit: 500 ml
+
+*/
+
+
 void LOG_PUMP_EVENT(acd_key_t *key, uint32_t seconds, float reading, float ml) 
 {
   // key->value = value of sensor when pump started (ie ph or orp)

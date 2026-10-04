@@ -18,6 +18,20 @@
 #include "cJSON.h"
 
 
+
+/*
+Need to change to add a header
+
+0 6 * * * root curl -s -S --show-error -o /dev/null \
+  -H 'X-AquachemD-Source: cron' \
+  -X PUT \
+  http://localhost:80/api/Filter_Pump/set -d value=1
+
+  // Look in net_services.c -> action_web_request() for the other side
+
+*/
+
+
 // Helper to safely extract strings from cJSON objects into our struct
 void get_json_string(cJSON *obj, const char *key, char *dest, size_t dest_size) {
     cJSON *item = cJSON_GetObjectItemCaseSensitive(obj, key);
