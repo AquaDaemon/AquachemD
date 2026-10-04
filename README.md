@@ -3,20 +3,13 @@
 
 <div align="right">
   <a href="https://aquadaemon.org">
-    <img
-      src="https://aquadaemon.org/images/aquadaemon-project2.png"
-      height="48"
-      alt="AquaDaemon">
+    <img src="https://aquadaemon.org/images/aquadaemon-project2.png" height="48" alt="AquaDaemon">
   </a>
 </div>
 
 <p align="center">
-  <img
-    src="https://aquadaemon.org/images/aquachemd.png"
-    width="120"
-    alt="AquachemD">
+  <img src="https://aquadaemon.org/images/aquachemd.png" width="120" alt="AquachemD">
 </p>
-
 
 <h1 align="center">AquachemD</h1>
 <p align="center"><b>Open-source, automated pool water chemistry — pH, ORP, and dosing, done right.</b></p>
