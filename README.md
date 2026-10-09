@@ -205,7 +205,179 @@ gpio_doser_interlock_scope=Global
 gpio_doser_ml_per_second=2.18
 ```
 
+## Full configuration reference
 
+#### System & web
+| Option | Description |
+| :--- | :--- |
+| `main_label` | Display name for the primary sampling/control group. |
+| `listen_address` | IP and port for the built-in web server. |
+| `log_level` | `DEBUG`, `INFO`, `NOTICE`, `WARNING`, `ERROR` |
+| `sensor_poll_time` | How often (seconds) sensors are polled. |
+| `log_sensor_readings` | Log every sensor reading, not just changes. |
+| `single_instance` | Only allow one copy of AquachemD to run at a time (default `Yes`). |
+| `gpio_chip` | GPIO character device used for GPIO pins (default `/dev/gpiochip0`). |
+| `switch_max_runtime` | Maximum time (seconds) a switch/output may stay on before it is turned off (default `7200`). |
+| `post_condition` | Publish the state of conditions (default `Yes`). |
+| `cert_dir` | Directory holding TLS certificates. Only available when built with TLS support. |
+| `master_off_as_interlock_global` | When you turn off Master, turn everything off or just global interlock. see Safety interlocks below |
+
+#### MQTT & Home Assistant
+| Option | Description |
+| :--- | :--- |
+| `mqtt_server` | Broker URI, e.g. `mqtt://homeassistant:1883`. |
+| `mqtt_user` / `mqtt_passwd` | Broker credentials. |
+| `mqtt_aquachemd_topic` | Root topic this instance publishes under. |
+| `mqtt_aqualinkd_topic` | Root topic to listen for AqualinkD state on (for pump interlocks). |
+| `mqtt_discovery_topic` | Home Assistant discovery prefix (default `homeassistant`). |
+| `mqtt_discovery_use_mac` | Append the device MAC to discovery IDs. |
+| `mqtt_discovery_strict_availability` | Use strict availability reporting in Home Assistant discovery (default `No`). |
+| `mqtt_timed_update` | Force a periodic MQTT update even if a value hasn't changed. |
+| `mqtt_repost_sensors` | Re-publish sensor values to MQTT again rather than only on change (default `No`). |
+| `mqtt_convert_to_degF` | Publish temperature in °F instead of °C. |
+
+#### Dosing
+| Option | Description |
+| :--- | :--- |
+| `ph_dose_range` / `orp_dose_range` | Threshold table, e.g. `8.0:20` = if pH ≥ 8.0, dose for 20s. |
+| `ph_default_dose_time` / `orp_default_dose_time` | Fallback dose time if no threshold matches. |
+| `ph_max_dose_time` / `orp_max_dose_time` | Hard ceiling on a single dose, regardless of threshold. |
+| `ph_average_dose_calc` / `orp_average_dose_calc` | Use a rolling average of readings rather than the latest single reading. |
+| `h2o_default_dose_time` / `h2o_max_dose_time` | Same pattern, for the water-topup doser. |
+| `temp_compensated_ph` | Adjust pH readings for current water temperature. |
+| `ph_reading_temp_min` / `ph_reading_temp_max` | Water temperature range (default `1`–`60`) within which pH readings are accepted. |
+| `log_zerorun_pump_events` | Also log dose events that ran for zero seconds (default `No`). |
+| `gpio_doser_running_dose_max_ml` | Per-doser cap on total volume dosed within the current period. If hit, dosing is skipped (with a warning) until the total resets — it does not disable the doser. |
+| `gpio_doser_tank_total_volume` / `gpio_doser_tank_uom` | Total capacity of the tank feeding this doser, and its unit (gal/mL) — enables tank-level tracking and reporting. |
+| `gpio_doser_tank_min_volume` | Volume below which the tank is considered empty. If set (alongside `tank_total_volume`), the doser is forced Off once reached — see [Doses automatically](#doses-automatically-and-tells-you-exactly-why) above. Leave unset to track level without auto-shutoff. |
+
+The `ezo_doser_*` options (`ezo_doser_running_dose_max_ml`, `ezo_doser_tank_total_volume`, `ezo_doser_tank_uom`, `ezo_doser_tank_min_volume`) behave the same way as their `gpio_doser_*` equivalents above.
+
+#### Safety interlocks
+| Option | Description |
+| :--- | :--- |
+| `*_condition_severity` | (e.g. `mqtt_condition_severity`, `gpio_condition_severity`) How severe it is when this condition fails: `local` degrades the system to a soft limit (dosers pause, sensors keep reading); `global` degrades it to a hard interlock (dosers pause AND Global-scope sensors also stop). |
+| `*_sensor_interlock_scope` | (including `gpio_input_interlock_scope`) How exposed this sensor is to interlocks raised elsewhere: `local` always read, regardless of severity — use for anything you always want visible, even through a hard interlock. `global` reads through a soft interlock but stops at a hard one. |
+| `gpio_doser_interlock_scope` / `ezo_doser_interlock_scope` | How exposed this doser is to interlocks raised elsewhere: `local` only stops for a hard interlock, keeps dosing through a soft one. `global` stops for either. There is no `allow` for a doser — it must always respect at least a hard interlock. |
+| `gpio_output_interlock_scope` | How exposed this switch is to interlocks raised elsewhere: `local` only stops for a hard interlock, keeps running through a soft one. `global` stops for either. `allow` always ignores interlock state. |
+
+## Complete details of all inputs / outputs
+
+Every block type also has an `*_ID` option (e.g. `ph_sensor_ID`, `gpio_doser_ID`) that gives that block a unique identifier.
+
+| Option | Description |
+| --- | --- |
+| `mqtt_condition_label` | Label to identify the MQTT condition block |
+| `mqtt_condition_ID` | Unique ID for the MQTT condition block |
+| `mqtt_condition_topic` | MQTT topic path to monitor for condition state |
+| `mqtt_condition_value` | Expected string/int value required to satisfy the condition |
+| `mqtt_condition_severity` | Severity failed condition that defines interlock scope for sensors (e.g., `global` vs `local`) |
+| `mqtt_condition_met_delay` | Delay duration (in seconds) before marking condition as met |
+| --- | --- |
+| `gpio_condition_label` | Label to identify the GPIO condition block |
+| `gpio_condition_ID` | Unique ID for the GPIO condition block |
+| `gpio_condition_pin` | Target GPIO pin number to sample |
+| `gpio_condition_pin_mode` | Pin configuration mode (`Active High` / `Active Low`) |
+| `gpio_condition_required_state` | Boolean pin state required to satisfy condition (`0`/`1`) |
+| `gpio_condition_severity` | Severity failed condition that defines interlock scope for sensors (e.g., `global` vs `local`) |
+| `gpio_condition_met_delay` | Delay duration (in seconds) before marking condition as met |
+| --- | --- |
+| `ph_sensor_label` | Label to identify the pH sensor block |
+| `ph_sensor_ID` | Unique ID for the pH sensor block |
+| `ph_sensor_type` | Driver or hardware sub-type (e.g., `ezo`) |
+| `ph_sensor_address` | Hexadecimal I2C bus address for the sensor |
+| `ph_sensor_interlock_scope` | Interlock scope for sensor execution control |
+| `ph_sensor_statistics` | Configuration parameters for sensor statistics tracking (eg, 1 day, 1 week, 2 hours) <b>**See note</b>|
+| --- | --- |
+| `orp_sensor_label` | Label to identify the ORP sensor block |
+| `orp_sensor_ID` | Unique ID for the ORP sensor block |
+| `orp_sensor_type` | Driver or hardware sub-type (e.g., `ezo`) |
+| `orp_sensor_address` | Hexadecimal I2C bus address for the sensor |
+| `orp_sensor_interlock_scope` | Interlock scope for sensor execution control |
+| `orp_sensor_statistics` | Configuration parameters for sensor statistics tracking (eg, 1 day, 1 week, 2 hours)  <b>**See note</b>|
+| --- | --- |
+| `prs_sensor_label` | Label to identify the pressure sensor block |
+| `prs_sensor_ID` | Unique ID for the pressure sensor block |
+| `prs_sensor_type` | Driver or hardware sub-type (e.g., `ezo`, `pte7300`) |
+| `prs_sensor_address` | Hexadecimal I2C bus address for the sensor |
+| `prs_sensor_interlock_scope` | Interlock scope for sensor execution control |
+| `prs_sensor_statistics` | Configuration parameters for sensor statistics tracking (eg, 1 day, 1 week, 2 hours)  <b>**See note</b>|
+| `prs_sensor_min_value` | Minimum raw input value for I2C pressure conversion |
+| `prs_sensor_max_value` | Maximum raw input value for I2C pressure conversion |
+| --- | --- |
+| `ec_sensor_label` | Label to identify the EC (conductivity) sensor block |
+| `ec_sensor_ID` | Unique ID for the EC sensor block |
+| `ec_sensor_type` | Driver or hardware sub-type (e.g., `ezo`) |
+| `ec_sensor_address` | Hexadecimal I2C bus address for the sensor |
+| `ec_sensor_interlock_scope` | Interlock scope for sensor execution control |
+| `ec_sensor_statistics` | Configuration parameters for sensor statistics tracking (eg, 1 day, 1 week, 2 hours)  <b>**See note</b>|
+| `ec_sensor_k` | Probe cell constant (K), e.g. `0.1`, `1`, `10` |
+| `ec_sensor_tds_factor` | Conversion factor used to derive TDS from the EC reading |
+| --- | --- |
+| `mqtt_sensor_label` | Label to identify the MQTT sensor block |
+| `mqtt_sensor_ID` | Unique ID for the MQTT sensor block |
+| `mqtt_sensor_topic` | MQTT topic path delivering numerical sensor values |
+| `mqtt_sensor_uom` | Unit of measurement string displayed for readings |
+| --- | --- |
+| `temp_sensor_label` | Label to identify the temperature sensor block |
+| `temp_sensor_ID` | Unique ID for the temperature sensor block |
+| `temp_sensor_type` | Driver or hardware sub-type (e.g., `ezo`, `d1w`, `mqtt`) |
+| `temp_sensor_address` | Hexadecimal I2C bus address for the sensor |
+| `temp_sensor_topic` | MQTT topic path (when using MQTT temperature sensor) |
+| `temp_sensor_path` | Linux 1-Wire sysfs device path (when using 1-Wire temperature sensor) |
+| `temp_sensor_offset` | Fixed offset value added to raw temperature readings |
+| `temp_sensor_scale` | Scale multiplier applied to raw temperature readings |
+| `temp_sensor_interlock_scope` | Interlock scope for sensor execution control |
+| `temp_sensor_statistics` | Configuration parameters for sensor statistics tracking (eg, 1 day, 1 week, 2 hours)  <b>**See note</b> |
+| `temp_sensor_uom` | Unit of measurement string (e.g., `°C`, `°F`) |
+| --- | --- |
+| `gpio_doser_label` | Label to identify the GPIO doser block |
+| `gpio_doser_ID` | Unique ID for the GPIO doser block |
+| `gpio_doser_type` | Controller or hardware driver type for the dosing pump |
+| `gpio_doser_pin` | Target GPIO pin controlling the dosing pump relay |
+| `gpio_doser_address` | Hexadecimal address (if using I2C relay expansion) |
+| `gpio_doser_pin_mode` | Pin configuration mode for the doser output pin |
+| `gpio_doser_ml_per_second` | Dosing pump flow rate calibration value (mL per second) |
+| `gpio_doser_tank_total_volume` | Total maximum liquid capacity of the associated chemical tank |
+| `gpio_doser_tank_min_volume` | Minimum safe liquid threshold before dosing disabled |
+| `gpio_doser_tank_uom` | Unit of measurement string for tank capacity (e.g., `Gallons`, `Litres`) |
+| `gpio_doser_running_dose_max_ml` | Maximum volume allowed during a pre defined period (usually 1day) <b>**See note</b> |
+| `gpio_doser_interlock_scope` | Interlock scope for doser safety overrides |
+| --- | --- |
+| `ezo_doser_label` | Label to identify the EZO (I2C) doser block |
+| `ezo_doser_ID` | Unique ID for the EZO doser block |
+| `ezo_doser_type` | Controller or hardware driver type for the dosing pump |
+| `ezo_doser_address` | Hexadecimal I2C bus address of the EZO dosing pump |
+| `ezo_doser_ml_per_second` | Dosing pump flow rate calibration value (mL per second) |
+| `ezo_doser_tank_total_volume` | Total maximum liquid capacity of the associated chemical tank |
+| `ezo_doser_tank_min_volume` | Minimum safe liquid threshold before dosing disabled |
+| `ezo_doser_tank_uom` | Unit of measurement string for tank capacity (e.g., `Gallons`, `Litres`) |
+| `ezo_doser_running_dose_max_ml` | Maximum volume allowed during a pre defined period (usually 1day) <b>**See note</b> |
+| `ezo_doser_interlock_scope` | Interlock scope for doser safety overrides |
+| --- | --- |
+| `gpio_input_label` | Label to identify the general GPIO input block |
+| `gpio_input_ID` | Unique ID for the GPIO input block |
+| `gpio_input_pin` | Target GPIO pin number to sample |
+| `gpio_input_pin_mode` | Pin configuration mode (`Active High` / `Active Low`) |
+| `gpio_input_required_state` | Logical pin state required for active status |
+| `gpio_input_interlock_scope` | Interlock scope for input execution control |
+| --- | --- |
+| `gpio_output_label` | Label to identify the general GPIO output block |
+| `gpio_output_ID` | Unique ID for the GPIO output block |
+| `gpio_output_pin` | Target GPIO pin number to drive |
+| `gpio_output_pin_mode` | Pin output drive mode |
+| `gpio_output_interlock_scope` | Interlock scope for output execution boundaries |
+| --- | --- |
+| `sysfs_sensor_label` | Label to identify the SysFS sensor block |
+| `sysfs_sensor_ID` | Unique ID for the SysFS sensor block |
+| `sysfs_sensor_path` | Absolute Linux filesystem path to sysfs attribute file |
+| `sysfs_sensor_offset` | Fixed offset added to raw sysfs reading |
+| `sysfs_sensor_scale` | Scale multiplier applied to raw sysfs reading |
+| `sysfs_sensor_regex` | Regex pattern used to extract numerical value from sysfs text |
+| `sysfs_sensor_interlock_scope` | Interlock scope for sensor execution control |
+| `sysfs_sensor_uom` | Unit of measurement string displayed for readings |
+
+<!--
 ## Full configuration reference
 
 #### System & web
@@ -331,7 +503,7 @@ gpio_doser_ml_per_second=2.18
 | `sysfs_sensor_scale` | Scale multiplier applied to raw sysfs reading |
 | `sysfs_sensor_regex` | Regex pattern used to extract numerical value from sysfs text |
 | `sysfs_sensor_uom` | Unit of measurement string displayed for readings |
-
+-->
 
 <b>**note</b> These options are totally dependant on when you want to reset them, please use the AquachemD scheduler to schedule the reset at the time of day/week/month you prefer.
 
