@@ -107,7 +107,6 @@ dose_permission_t dosing_check_safety(const dose_config_t *config, const dose_re
 
     (void)config;
     (void)request;
-    (void)safety;
 
     permission.decision = DOSE_DECISION_BLOCK;
     permission.reason = DOSE_REASON_NONE;

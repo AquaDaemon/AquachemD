@@ -45,6 +45,7 @@ Usage:
 #include <fcntl.h>
 #include <sys/file.h>
 #include <errno.h>
+#include <math.h>
 
 #include "version.h"
 #include "aquachemd.h"
@@ -261,6 +262,52 @@ double elapsed_ms(const struct timespec *start_time) {
 
     return (delta_sec * 1000.0) + (delta_nsec / 1000000.0);
 }
+/*
+ezo_pump_request(acd_key_t *key, acd_state_t state)
+{
+  if (state == ACD_LED_ON)
+    setMASK(key->flags, EZO_PUMP_REQUEST_ON);
+  else
+    setMASK(key->flags, EZO_PUMP_REQUEST_OFF);
+
+  aquachemd_force_sensor_poll();
+}
+*/
+/*
+check_ezo_pump_requests_status(struct aquachemdata *acdata, acd_key_t *key)
+{
+  if (key->state == ACD_LED_ON) {
+    if ( isMASKSET(key->flags, EZO_PUMP_REQUEST_OFF)) {
+
+    } else {
+    pump_status_t pump_reading = pump_get_status();
+    if (pump_reading.status == EZO_SUCCESS) {
+      if (!pump_reading.is_pumping) {
+        // Pump is off, set off
+        // NSF NEED TO LOG THE PUMP RUN.
+        float dose_ml = pump_get_dispensed_volume();
+        set_key_state(acdata, key, ACD_LED_ENABLED);
+      }
+    }
+    } else {
+      LOG(LOG_WARNING, "EZO Pump '%s' read failed (status %d)\n", curr->label, pump_reading.status);
+      //update_display_message(&acddata, ACD_MSG_SENSOR_READ_FAILED, curr->label);
+      sensor_read_error(acdata, key);
+    }
+  } else if ( isMASKSET(key->flags, EZO_PUMP_REQUEST_ON)) {
+    // Turn on dose.  
+    if (pump_dose_volume_at_rate(key->requested_dose, key->dose_stats.flow_rate) == EZO_SUCCESS) {
+      removeMASK(key->flags, EZO_PUMP_REQUEST_ON);
+      set_key_state(acdata, key, ACD_LED_ON);
+    } else {
+      // ERROR
+      LOG(LOG_ERR, "EZO Pump '%s' failed to turn on");
+      sensor_read_error(acdata, key);
+    }
+  }
+}
+*/
+
 
 void printHelp()
 {
@@ -371,17 +418,20 @@ int main(int argc, char *argv[])
     if (strcasecmp(argv[idx], "mid") == 0)
     {
       printf("Calibrating pH mid-point (7.00)...\n");
-      return ph_calibrate_mid() == EZO_SUCCESS ? 0 : 1;
+      //return ph_calibrate_mid() == EZO_SUCCESS ? 0 : 1;
+      return ph_calibrate_mid(&(ezo_sensor_t){ .address = EZO_PH_ADDR }) == EZO_SUCCESS ? 0 : 1;
     }
     else if (strcasecmp(argv[idx], "low") == 0)
     {
       printf("Calibrating pH low-point (4.00)...\n");
-      return ph_calibrate_low() == EZO_SUCCESS ? 0 : 1;
+      //return ph_calibrate_low() == EZO_SUCCESS ? 0 : 1;
+      return ph_calibrate_low(&(ezo_sensor_t){ .address = EZO_PH_ADDR }) == EZO_SUCCESS ? 0 : 1;
     }
     else if (strcasecmp(argv[idx], "high") == 0)
     {
       printf("Calibrating pH high-point (10.00)...\n");
-      return ph_calibrate_high() == EZO_SUCCESS ? 0 : 1;
+      //return ph_calibrate_high() == EZO_SUCCESS ? 0 : 1;
+      return ph_calibrate_high(&(ezo_sensor_t){ .address = EZO_PH_ADDR }) == EZO_SUCCESS ? 0 : 1;
     }
     else if (strcasecmp(argv[2], "orp") == 0)
     {
@@ -392,7 +442,8 @@ int main(int argc, char *argv[])
       }
       float mv = atof(argv[3]);
       printf("Calibrating ORP at %.2f mV...\n", mv);
-      return orp_calibrate(mv) == EZO_SUCCESS ? 0 : 1;
+      //return orp_calibrate(mv) == EZO_SUCCESS ? 0 : 1;
+      return orp_calibrate(&(ezo_sensor_t){ .address = EZO_ORP_ADDR }, mv) == EZO_SUCCESS ? 0 : 1;
     }
     else if ( (strcasecmp(argv[2], "rtd") == 0) ||
               (strcasecmp(argv[2], "temp") == 0))
@@ -404,7 +455,8 @@ int main(int argc, char *argv[])
       }
       float temp = atof(argv[3]);
       printf("Calibrating RTD / Temperature probe at %.2f°C...\n", temp);
-      return rtd_calibrate(temp) == EZO_SUCCESS ? 0 : 1;
+      //return rtd_calibrate(temp) == EZO_SUCCESS ? 0 : 1;
+      return rtd_calibrate(&(ezo_sensor_t){ .address = EZO_RTD_ADDR }, temp) == EZO_SUCCESS ? 0 : 1;
     }
     else if ( (strcasecmp(argv[2], "prs") == 0))
     {
@@ -415,7 +467,8 @@ int main(int argc, char *argv[])
       }
       float temp = atof(argv[3]);
       printf("Calibrating PRS sensor at %.2fpsi...\n", temp);
-      return prs_calibrate(temp) == EZO_SUCCESS ? 0 : 1;
+      //return prs_calibrate(temp) == EZO_SUCCESS ? 0 : 1;
+      return prs_calibrate(&(ezo_sensor_t){ .address = EZO_PRS_ADDR }, temp) == EZO_SUCCESS ? 0 : 1;
     }
     else
     {
@@ -528,6 +581,22 @@ reload_configuration:
         gpio_write(&curr->data.gpio, 0); // Turn pump off
         //sync_pump_state(&acddata, curr);
       }
+    } else if (curr->type == ACD_TYPE_EZO_EC) {
+      ec_set_k(&curr->data.ezo, curr->data.ezo.ec_sensor_k);
+      ec_set_tds_factor(&curr->data.ezo, curr->data.ezo.ec_sensor_tds_factor);
+      ec_set_output(&curr->data.ezo, EC_OUTPUT_CONDUCTIVITY, true);
+      ec_set_output(&curr->data.ezo, EC_OUTPUT_TDS, true);
+      ec_set_output(&curr->data.ezo, EC_OUTPUT_SALINITY, true);
+      ec_set_output(&curr->data.ezo, EC_OUTPUT_SPECIFIC_GRAVITY, true);
+    } else if (curr->type == ACD_TYPE_EZO_PMP) {
+      pump_stop(&curr->data.ezo);                           // never start with a pump running
+      float max_ml_min = pump_get_max_flow_rate(&curr->data.ezo);
+      if (max_ml_min > 0) {
+        float dev = max_ml_min / 60.0f;
+        if (fabsf(dev - curr->dose_stats.flow_rate) > 0.05f * dev)
+        LOG(LOG_WARNING, "%s: configured %.2f ml/s, pump reports %.2f ml/s; using the pump's",curr->label, curr->dose_stats.flow_rate, dev);
+        curr->dose_stats.flow_rate = dev;
+      }
     } else if (curr->type == ACD_TYPE_D1W_TEMP) {
       w1_init_generic(&curr->data.w1, curr->data.w1.path, curr->data.w1.scale, curr->data.w1.offset);
     } else if (curr->type == ACD_TYPE_SYSFS_VALUE) {
@@ -630,6 +699,9 @@ reload_configuration:
           LOG(LOG_NOTICE,"Condition satisfied: %s\n", curr->label);
         }
       }
+      else if (curr->type == ACD_TYPE_EZO_PMP && curr->state == ACD_LED_ON) {
+        // EZO pump is both input and putput, so we need to read the status of the pump 
+      }
     }
     
     //  Master state = ON, scope = Allow         // All good.
@@ -681,7 +753,7 @@ reload_configuration:
           }
         } break;
         case ACD_TYPE_EZO_TEMP: {
-          rtd_reading_t temp_reading = rtd_get_reading();
+          rtd_reading_t temp_reading = rtd_get_reading(&key->data.ezo);
           if (temp_reading.status == EZO_SUCCESS) {
             LOG(reading_log_level,"Temp %s : %.2f°C\n", key->label, temp_reading.value);
             if (key->index == MASTER_ID) { // If this is the master temp sensor, also update the temp reading for pH compensation
@@ -702,7 +774,7 @@ reload_configuration:
         case ACD_TYPE_EZO_PH: {
           ph_reading_t ph_reading;
           if (_acdconfig_.temp_compensated_ph == false) {
-            ph_reading = ph_get_reading();
+            ph_reading = ph_get_reading(&key->data.ezo);
           } else if ( temp_reading_for_ph != UNKNOWN) {
             if (temp_reading_for_ph > _acdconfig_.ph_reading_temp_max || temp_reading_for_ph < _acdconfig_.ph_reading_temp_min ) {
               char buf[128];
@@ -713,7 +785,7 @@ reload_configuration:
               break;
             }
             LOG(reading_log_level, "Using %s, %.2f for pH compensated reading", master_temp_label?master_temp_label:"", temp_reading_for_ph);
-            ph_reading = ph_get_reading_compensated(temp_reading_for_ph);
+            ph_reading = ph_get_reading_compensated(&key->data.ezo, temp_reading_for_ph);
           } else {
             LOG(LOG_WARNING, "EZO pH Sensor '%s' skipped compensation because temp is unknown\n", key->label);
             set_key_state(&acddata, key, ACD_LED_OFF);
@@ -733,7 +805,7 @@ reload_configuration:
           }
         } break;
         case ACD_TYPE_EZO_ORP: {
-          orp_reading_t orp_reading = orp_get_reading();
+          orp_reading_t orp_reading = orp_get_reading(&key->data.ezo);
           if (orp_reading.status == EZO_SUCCESS) {
             LOG(reading_log_level,"EZO ORP Sensor %s : %.2f mV\n", key->label, orp_reading.value);
             ASSIGN_IF_CHANGED(key->value, orp_reading.value, acddata.is_dirty, key->is_dirty);
@@ -747,7 +819,7 @@ reload_configuration:
           }
          } break;
         case ACD_TYPE_EZO_PRS: {
-          prs_reading_t prs_reading = prs_get_reading();
+          prs_reading_t prs_reading = prs_get_reading(&key->data.ezo);
           if (prs_reading.status == EZO_SUCCESS) {
             LOG(reading_log_level,"EZO PRS Sensor %s : %.2f mV\n", key->label, prs_reading.value);
             ASSIGN_IF_CHANGED(key->value, prs_reading.value, acddata.is_dirty, key->is_dirty);
@@ -760,6 +832,35 @@ reload_configuration:
             sensor_read_error(&acddata, key);
           }
 
+        } break;
+        case ACD_TYPE_EZO_EC: {
+          ec_reading_t ec_reading = ec_get_reading(&key->data.ezo);
+          if (ec_reading.status == EZO_SUCCESS) {
+            // There are multiple values, so run through the children and update each one that is set to be read.
+            for (acd_key_t *child = key; child != NULL; child = child->child) {
+              if (isMASKSET(child->data.ezo.flags, EC_CONDUCTIVITY)) {
+                LOG(reading_log_level,"EZO EC Sensor %s : %.2f %s\n", child->label, ec_reading.conductivity, uom_to_str(child->uom));
+                ASSIGN_IF_CHANGED(child->value, ec_reading.conductivity, acddata.is_dirty, child->is_dirty);
+              } else if (isMASKSET(child->data.ezo.flags, EC_TDS)) {
+                LOG(reading_log_level,"EZO EC Sensor %s : %.2f %s\n", child->label, ec_reading.tds, uom_to_str(child->uom));
+                ASSIGN_IF_CHANGED(child->value, ec_reading.tds, acddata.is_dirty, child->is_dirty);
+               } else if (isMASKSET(child->data.ezo.flags, EC_SALINITY)) {
+                LOG(reading_log_level,"EZO EC Sensor %s : %.2f %s\n", child->label, ec_reading.salinity, uom_to_str(child->uom));
+                ASSIGN_IF_CHANGED(child->value, ec_reading.salinity, acddata.is_dirty, child->is_dirty);
+              } else if (isMASKSET(child->data.ezo.flags, EC_SPECIFIC_GRAVITY)) {
+                LOG(reading_log_level,"EZO EC Sensor %s : %.2f %s\n", child->label, ec_reading.specific_gravity, uom_to_str(child->uom));
+                ASSIGN_IF_CHANGED(child->value, ec_reading.specific_gravity, acddata.is_dirty, child->is_dirty);    
+              }
+              set_key_state(&acddata, child, ACD_LED_ON);
+              child->err_cnt=0;
+              update_sensor_average(child);
+            }
+ 
+          } else {
+            LOG(LOG_WARNING, "EZO EC Sensor '%s' read failed (status %d)\n", key->label, ec_reading.status);            
+            update_display_message(&acddata, ACD_MSG_SENSOR_READ_FAILED, key->label);
+            sensor_read_error(&acddata, key);
+          }
         } break;
         case ACD_TYPE_SYSFS_VALUE:{
           sysfs_reading_t reading = sysfs_read_sensor(&key->data.sysfs);

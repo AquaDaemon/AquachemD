@@ -21,7 +21,7 @@
 #include "acd_timer.h"
 #include "sensor_stats.h"
 #include "web_config.h"
-
+#include "version.h"
 
 
 static struct aquachemdata *_aquachemd_data;
@@ -205,52 +205,58 @@ bool process_sensor_request(char *buffer, size_t buf_size, char *ws_request, flo
   //LOG(LOG_ERR,"process_sensor_request() %s '%s'\n",is_calibration?"calibration":"reading", ws_request);
 
   if (strcasecmp(ws_request, "cal_ph") == 0) {
+    ezo_sensor_t ph = { .address = EZO_PH_ADDR }; // Need to pass ADDR from UI in future
     if (is_calibration) {
       LOG(LOG_NOTICE, "Calibrating pH - %.2f",calibrationValue);
-      cal_rtn = ph_calibrate_by_value(calibrationValue);
+      cal_rtn = ph_calibrate_by_value(&ph, calibrationValue);
     }
     if (cal_rtn == EZO_SUCCESS) {
       LOG(LOG_NOTICE, "Reading pH");
-      ph_reading_t reading = ph_get_reading();
+      ph_reading_t reading = ph_get_reading(&ph);
       if (reading.status == EZO_SUCCESS){value=reading.value; LOG(LOG_NOTICE, "pH reading %.2f",value);}
       else {LOG(LOG_ERR, "Failed to read pH sensor, status %d", reading.status);}
       read_rtn = reading.status;
     }
 
   } else if (strcasecmp(ws_request, "cal_orp") == 0) {
+    ezo_sensor_t orp = { .address = EZO_ORP_ADDR }; // Need to pass ADDR from UI in future
     if (is_calibration) {
       LOG(LOG_NOTICE, "Calibrating ORP - %.2f",calibrationValue);
-      cal_rtn = orp_calibrate(calibrationValue);
+      cal_rtn = orp_calibrate(&orp, calibrationValue);
     }
     if (cal_rtn == EZO_SUCCESS) {
       LOG(LOG_NOTICE, "Reading ORP");
-      orp_reading_t reading = orp_get_reading();
+      orp_reading_t reading = orp_get_reading(&orp);
       if (reading.status == EZO_SUCCESS){value=reading.value; LOG(LOG_NOTICE, "ORP reading %.2f",value);}
       else {LOG(LOG_ERR, "Failed to read ORP sensor, status %d", reading.status);}
       read_rtn = reading.status;
     }
 
   } else if (strcasecmp(ws_request, "cal_rtd") == 0) {
+    ezo_sensor_t rtd = { .address = EZO_RTD_ADDR }; // Need to pass ADDR from UI in future
+    
     if (is_calibration) {
       LOG(LOG_NOTICE, "Calibrating Temperature - %.2f",calibrationValue);
-      cal_rtn = rtd_calibrate(calibrationValue);
+      cal_rtn = rtd_calibrate(&rtd, calibrationValue);
     }
     if (cal_rtn == EZO_SUCCESS) {
       LOG(LOG_NOTICE, "Reading Temperature");
-      rtd_reading_t reading = rtd_get_reading();
+      rtd_reading_t reading = rtd_get_reading(&rtd);
       if (reading.status == EZO_SUCCESS){value=reading.value; LOG(LOG_NOTICE, "Temperature reading %.2f",value);}
       else {LOG(LOG_ERR, "Failed to read Temperature sensor, status %d", reading.status);}
       read_rtn = reading.status;
     }
 
   } else if (strcasecmp(ws_request, "cal_prs") == 0) {
+    ezo_sensor_t prs = { .address = EZO_PRS_ADDR }; // Need to pass ADDR from UI in future
+    
     if (is_calibration) {
       LOG(LOG_NOTICE, "Calibrating Pressure - %.2f",calibrationValue);
-      cal_rtn = prs_calibrate(calibrationValue);
+      cal_rtn = prs_calibrate(&prs, calibrationValue);
     }
     if (cal_rtn == EZO_SUCCESS) {
       LOG(LOG_NOTICE, "Reading Pressure");
-      prs_reading_t reading = prs_get_reading();
+      prs_reading_t reading = prs_get_reading(&prs);
       if (reading.status == EZO_SUCCESS){value=reading.value; LOG(LOG_NOTICE, "Pressure reading %.2f",value);}
       else {LOG(LOG_ERR, "Failed to read Pressure sensor, status %d", reading.status);}
       read_rtn = reading.status;
@@ -792,11 +798,10 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
   #ifdef AQ_TM_DEBUG 
     int tid; 
   #endif
-  //static double last_control_time;
 
-  // LOG(LOG_DEBUG, "Event\n");
   switch (ev) {
   //case MG_EV_HTTP_REQUEST:
+
   case MG_EV_HTTP_MSG:
     http_msg = (struct mg_http_message *)ev_data;
 
@@ -1282,7 +1287,34 @@ void start_mqtt(struct mg_mgr *mgr) {
   }
 }
 
+// mdns glue
+static struct mg_dnssd_record s_http_rec;
 
+static void mdns_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
+  (void) c;
+  if (ev != MG_EV_MDNS_REQ) return;
+
+  struct mg_mdns_req *req = (struct mg_mdns_req *) ev_data;
+  uint16_t t = req->rr->atype;
+
+  if (t == MG_DNS_RTYPE_PTR || t == MG_DNS_RTYPE_SRV || t == MG_DNS_RTYPE_TXT) {
+    if (req->is_listing) return;  // generic service browse, not supported
+    if (mg_strcmp(req->reqname, mg_str("_http._tcp")) == 0) {
+      req->r = &s_http_rec;
+      req->is_resp = true;
+    }
+  }
+}
+
+static bool start_mdns(struct mg_mgr *mgr, const char *hostname, const char *listen_url) {
+  memset(&s_http_rec, 0, sizeof(s_http_rec));
+  s_http_rec.srvcproto = mg_str("_http._tcp");
+  s_http_rec.txt = mg_str_n("\0", 1);          // empty TXT record
+  s_http_rec.port = mg_url_port(listen_url);   // "http://0.0.0.0:88" -> 88
+
+  // hostname must stay valid for the life of the listener (literal or static)
+  return mg_mdns_listen(mgr, mdns_ev_handler, (void *) hostname) != NULL;
+}
 
 
 
@@ -1312,6 +1344,15 @@ bool network_service(struct mg_mgr *mgr, struct aquachemdata *acdata) {
   if (nc == NULL) {
     LOG(LOG_ERR, "Failed to create listener on port %s\n",_acdconfig_.listen_address);
     return false;
+  }
+
+  
+  // Start mDNS responder with hostname "mydevice" (resolves to mydevice.local)
+  if (!start_mdns(mgr, AQUACHEMD_SHORT_NAME, _acdconfig_.listen_address)) {
+    LOG(LOG_WARNING, "Failed to create mDNS responder '%s.local'\n",AQUACHEMD_SHORT_NAME);
+    // non-fatal: the web server is already up
+  } else {
+    LOG(LOG_NOTICE, "mDNS responder started for '%s.local'\n",AQUACHEMD_SHORT_NAME);
   }
 
   // Set default web options

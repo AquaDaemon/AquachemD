@@ -22,7 +22,11 @@ typedef enum {
     UOM_RATIO,
     UOM_MILLILITERS,
     UOM_LITERS,
-    UOM_GALLONS
+    UOM_GALLONS,
+    UOM_MICROSIEMENS_CM,
+    UOM_PPM,
+    UOM_PSU,
+    UOM_SPECIFIC_GRAVITY,
 } acd_uom_t;
 
 acd_uom_t   parse_uom(const char *str);

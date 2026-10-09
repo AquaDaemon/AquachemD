@@ -55,6 +55,12 @@ static const uom_alias_map_t uom_parse_table[] = {
     // RPM Aliases
     { "rpm",         UOM_RPM },
 
+    // Conductivity
+    { "µS/cm",       UOM_MICROSIEMENS_CM},
+    { "cm",          UOM_MICROSIEMENS_CM},
+    { "ppm",         UOM_PPM },
+    { "PSU",         UOM_PSU },    // Practical Salinity Unit
+    
     // System Metrics
     { "bytes",       UOM_BYTES },
     { "seconds",     UOM_SECONDS },
@@ -111,6 +117,11 @@ const char* uom_to_str(acd_uom_t uom) {
         case UOM_MILLILITERS:return "ml";
         case UOM_LITERS:     return "L";
         case UOM_GALLONS:    return "gal";
+        case UOM_MICROSIEMENS_CM:  return "µS/cm"; // This is correct but too long.
+        //case UOM_MICROSIEMENS_CM:  return "µS";
+        case UOM_PPM:        return "ppm";
+        case UOM_PSU:        return "PSU";
+        case UOM_SPECIFIC_GRAVITY:return "SG";
         //case UOM_CUSTOM:     return "custom";
         case UOM_NONE:       
         default:             return "";
@@ -133,6 +144,10 @@ const char* uom_to_fullstr(acd_uom_t uom) {
         case UOM_MILLILITERS:return "milliliters";
         case UOM_LITERS:     return "liters";
         case UOM_GALLONS:    return "gallons";
+        case UOM_MICROSIEMENS_CM:  return "microsiemens per centimeter";
+        case UOM_PPM:        return "parts per million";
+        case UOM_PSU:        return "practical salinity units";
+        case UOM_SPECIFIC_GRAVITY:return "specific gravity";
         default:             return "";
     }
 }

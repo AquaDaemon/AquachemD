@@ -67,16 +67,16 @@
 		},
 		"PMP_1":	{
 			"display":	true,
-      "__on_icon": "hk/barrel.svg",
-      "__off_icon": "hk/barrel-outline.svg"
+			"__on_icon":	"hk/barrel.svg",
+			"__off_icon":	"hk/barrel-outline.svg"
 		},
 		"PMP_2":	{
 			"display":	true
 		},
 		"PMP_3":	{
 			"display":	true,
-      "__on_icon": "hk/water-pump.svg",
-      "__off_icon": "hk/water-pump-off.svg"
+			"__on_icon":	"hk/water-pump.svg",
+			"__off_icon":	"hk/water-pump-off.svg"
 		},
 		"TEMP_1":	{
 			"display":	true,
@@ -95,7 +95,7 @@
 			"display":	true,
 			"on_text":	"Sampling",
 			"off_text":	"Off",
-			"precision":	1,
+			"precision":	2,
 			"thresholds":	{
 				"outofrange":	{
 					"min":	7,

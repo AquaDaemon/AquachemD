@@ -71,6 +71,7 @@ typedef enum {
     ACD_TYPE_EZO_ORP,
     ACD_TYPE_EZO_TEMP,
     ACD_TYPE_EZO_PRS,
+    ACD_TYPE_EZO_EC,
     ACD_TYPE_I2C_PRS,
     ACD_TYPE_I2C_TEMP,
     ACD_TYPE_MQTT_TEMP,
@@ -117,11 +118,11 @@ typedef struct {
   char *target_value; 
   //char *current_value; 
 } mqtt_sensor_t;
-
+/*
 typedef struct {
   unsigned char address;
 } ezo_sensor_t;
-
+*/
 typedef struct {
   float total_volume;
   float remaining_volume;
@@ -433,6 +434,7 @@ typedef struct acd_key_t {
       dose_stats_t dose_stats;
       uint32_t delay_on;    // Condition = used for a delay before setting to on.
       sensor_stats_t stats; // Sensor    = used for statics.
+      float requested_dose; // EZO Pump  = used for for requested dose volume in ml.
     };
 
     union {

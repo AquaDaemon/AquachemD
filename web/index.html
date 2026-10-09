@@ -983,7 +983,7 @@
       } catch (exception) { console.error("setTileState() :-" + exception); }
     }
 
-    function reduct(value, precision=-1) {
+    function reduct(value, numdigits=-1) {
       const str = String(value);
       const parts = str.split('.');
       const integerDigits = parts[0].length;
@@ -993,7 +993,7 @@
       //let fractionalDigits = precision >= 0? precision : parts.length > 1 ? parts[1].length : 0;
       //if (fractionalDigits === 0) return integerDigits;
 
-      let total_digits = _aq_display_tile_size == "large" ? 5 : 3;
+      let total_digits = (numdigits==-1)?(_aq_display_tile_size == "large" ? 5 : 3) : numdigits;
       if (integerDigits + fractionalDigits <= total_digits) return value;
       else if (integerDigits >= total_digits) return parts[0].toString();
       else return parts[0].toString() + "." + parts[1].substring(0, total_digits - integerDigits);
@@ -1043,7 +1043,8 @@
           value = parseFloat(value).toFixed(2);
         }
       }
-      return reduct(value) + formatUOM(ext);
+      return reduct(value, (ext==''?5:3)) + formatUOM(ext);
+      //return reduct(value, 3) + formatUOM(ext);
     }
 
     function setTileValue(id, value, status = 'on') {

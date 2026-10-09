@@ -373,20 +373,20 @@ void turn_pump_on(struct aquachemdata *acdata, acd_key_t *key, uint32_t duration
   }
 
   // Sanity check
-  if (isMASKSET(key->flags, PH_PUMP) && duration_sec > _acdconfig_.ph_max_dose_time) {
-    LOG(LOG_WARNING, "Pump %s request runtime %d is greater than maximum, reset to %d", key->label, duration_sec, _acdconfig_.ph_max_dose_time);
-    duration_sec = _acdconfig_.ph_max_dose_time;
-  } else if (isMASKSET(key->flags, ORP_PUMP) && duration_sec > _acdconfig_.orp_max_dose_time) {
-    LOG(LOG_WARNING, "Pump %s request runtime %d is greater than maximum, reset to %d", key->label, duration_sec, _acdconfig_.orp_max_dose_time);
-    duration_sec = _acdconfig_.orp_max_dose_time;
-  } else if (isMASKSET(key->flags, H2O_PUMP) && duration_sec > _acdconfig_.h2o_max_dose_time) {
-    LOG(LOG_WARNING, "Pump %s request runtime %d is greater than maximum, reset to %d", key->label, duration_sec, _acdconfig_.h2o_max_dose_time);
-    duration_sec = _acdconfig_.h2o_max_dose_time;
+  if (isMASKSET(key->flags, PH_PUMP) && runtime > _acdconfig_.ph_max_dose_time) {
+    LOG(LOG_WARNING, "Pump %s request runtime %d is greater than maximum, reset to %d", key->label, runtime, _acdconfig_.ph_max_dose_time);
+    runtime = _acdconfig_.ph_max_dose_time;
+  } else if (isMASKSET(key->flags, ORP_PUMP) && runtime > _acdconfig_.orp_max_dose_time) {
+    LOG(LOG_WARNING, "Pump %s request runtime %d is greater than maximum, reset to %d", key->label, runtime, _acdconfig_.orp_max_dose_time);
+    runtime = _acdconfig_.orp_max_dose_time;
+  } else if (isMASKSET(key->flags, H2O_PUMP) && runtime > _acdconfig_.h2o_max_dose_time) {
+    LOG(LOG_WARNING, "Pump %s request runtime %d is greater than maximum, reset to %d", key->label, runtime, _acdconfig_.h2o_max_dose_time);
+    runtime = _acdconfig_.h2o_max_dose_time;
   }
 
   if (isMASKSET(key->flags, TIMER_ACTIVE) && key->state == ACD_LED_ON) {
-    LOG(LOG_INFO, "Resetting timer for %s to %d\n",key->label, duration_sec);
-    start_timer(acdata, key, 0, duration_sec);
+    LOG(LOG_INFO, "Resetting timer for %s to %d\n",key->label, runtime);
+    start_timer(acdata, key, 0, runtime);
     return;
   }
 
@@ -399,34 +399,55 @@ void turn_pump_on(struct aquachemdata *acdata, acd_key_t *key, uint32_t duration
     return;
   }*/
 
-  LOG(LOG_INFO, "Turning on %s\n", key->label);
-
-  if (key->type == ACD_TYPE_GPIO_PMP) {
-    relay_on(&key->data.gpio);
-    key->ison = pump_is_on(&key->data.gpio);
-  } else {
-    LOG(LOG_ERR, "Add Code in state_manage.c - turn_pump_on()");
-  }
-  ASSIGN_IF_CHANGED(key->state , ACD_LED_ON, acdata->is_dirty, key->is_dirty);
-  
   if (isMASKSET(key->flags, PH_PUMP)) {
     key->value = get_sensor_value(acdata, ACD_TYPE_EZO_PH);
   } else if (isMASKSET(key->flags, ORP_PUMP)) {
     key->value = get_sensor_value(acdata, ACD_TYPE_EZO_ORP);
   }
 
-  start_timer(acdata, key, 0, duration_sec<=0?runtime:duration_sec);
+  LOG(LOG_INFO, "Turning on %s\n", key->label);
+    
+  if (key->type == ACD_TYPE_GPIO_PMP) {
+    relay_on(&key->data.gpio);
+    key->ison = pump_is_on(&key->data.gpio);
+  } else if (key->type == ACD_TYPE_EZO_PMP) { // EZO pump needs to be set from different thread
+    // Going to pump at a known ML rate and time, then stop early.
+    // Since EZO is only in minutes, we need to change from ml/s and also round up to next minute.
+    if (pump_dose_rate(&key->data.ezo, key->dose_stats.flow_rate * 60, (runtime + 59) / 60) != EZO_SUCCESS) {
+      LOG(LOG_ERR, "EZO Pump '%s' failed to turn on");
+      return;
+    }
+  } else {
+    LOG(LOG_ERR, "Add Code in state_manage.c - turn_pump_on()");
+  }
+
+  ASSIGN_IF_CHANGED(key->state , ACD_LED_ON, acdata->is_dirty, key->is_dirty);
+  
+  start_timer(acdata, key, 0, runtime);
 }
 
 void turn_pump_off(struct aquachemdata *acdata, acd_key_t *key, acd_state_t desired_state) {
   time_t start = get_timer_started_at(key);
   time_t now = time(NULL);
+  float dose_ml = 0;
 
   LOG(LOG_INFO, "Turning off %s\n", key->label);
 
   if (key->type == ACD_TYPE_GPIO_PMP) {
     relay_off(&key->data.gpio);
     key->ison = pump_is_on(&key->data.gpio);
+  } else if (key->type == ACD_TYPE_EZO_PMP) { // EZO pump needs to be set from different thread
+    pump_dose_status_t pump_reading = pump_get_dose_status(&key->data.ezo);
+    if (pump_reading.status != EZO_SUCCESS) {
+      LOG(LOG_ERR, "Reading pump %s state - turn_pump_off()\n",key->label);
+    }
+    // Need to destinguish off from scheduler vs off from some force.
+    if (true) { // If pump is force off (ie not from scheduler)
+        if (pump_reading.is_pumping) { pump_stop(&key->data.ezo); }
+        dose_ml = pump_get_dispensed_volume(&key->data.ezo);  
+    } else {
+      // Wait for off
+    }
   } else {
     LOG(LOG_ERR, "Add Code in state_manage.c - turn_pump_off()");
   }
@@ -434,7 +455,7 @@ void turn_pump_off(struct aquachemdata *acdata, acd_key_t *key, acd_state_t desi
   // Calculate actual runtime and log the event
   if (start > 0) {
     uint32_t actual_runtime = (uint32_t)(now - start);
-    float dose_ml = actual_runtime * key->dose_stats.flow_rate;
+    if (key->type != ACD_TYPE_EZO_PMP){ dose_ml = actual_runtime * key->dose_stats.flow_rate;}
     LOG_PUMP_EVENT(key, actual_runtime, key->value, dose_ml);
     post_dosing_event(key, actual_runtime, dose_ml);
     calculate_tank_volume_after_dose(key->child, dose_ml);
@@ -733,6 +754,7 @@ bool set_key_state(struct aquachemdata *acdata, acd_key_t *key, acd_state_t stat
     case ACD_TYPE_EZO_ORP:
     case ACD_TYPE_EZO_TEMP:
     case ACD_TYPE_EZO_PRS:
+    case ACD_TYPE_EZO_EC:
     case ACD_TYPE_MQTT_TEMP:
     case ACD_TYPE_D1W_TEMP:
     case ACD_TYPE_SYSFS_VALUE:

@@ -37,14 +37,32 @@
 
 
 // Helper Macros to handle the pointer casting
+/*
 // Mongoose 7.19+ Pointer Mapping. We are using fn_data
 #define GET_AQD_FLAGS(nc)    ((uintptr_t)(nc)->fn_data)
 #define SET_AQD_FLAGS(nc, f) ((nc)->fn_data = (void *)(uintptr_t)(f))
 
 #define IS_MQTT_CONNECTING(nc) (GET_AQD_FLAGS(nc) & AQD_MG_CON_MQTT_CONNECTING)
 #define IS_WEBSOCKET(nc)       ((nc)->is_websocket)
+*/
 
+// Mongoose 7.23+ Pointer Mapping. We are using data
 
+#include <string.h>
+
+static inline uintptr_t aqd_get_flags(const struct mg_connection *nc) {
+  uintptr_t f;
+  memcpy(&f, nc->data, sizeof(f));   // avoids alignment/aliasing problems
+  return f;
+}
+static inline void aqd_set_flags(struct mg_connection *nc, uintptr_t f) {
+  memcpy(nc->data, &f, sizeof(f));
+}
+
+#define GET_AQD_FLAGS(nc)      aqd_get_flags(nc)
+#define SET_AQD_FLAGS(nc, f)   aqd_set_flags((nc), (uintptr_t)(f))
+#define IS_MQTT_CONNECTING(nc) (GET_AQD_FLAGS(nc) & AQD_MG_CON_MQTT_CONNECTING)
+#define IS_WEBSOCKET(nc)       ((nc)->is_websocket)
 
 
 #endif //AQD_MG_COMPAT_H_
