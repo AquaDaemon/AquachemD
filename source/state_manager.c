@@ -413,8 +413,14 @@ void turn_pump_on(struct aquachemdata *acdata, acd_key_t *key, uint32_t duration
   } else if (key->type == ACD_TYPE_EZO_PMP) { // EZO pump needs to be set from different thread
     // Going to pump at a known ML rate and time, then stop early.
     // Since EZO is only in minutes, we need to change from ml/s and also round up to next minute.
-    if (pump_dose_rate(&key->data.ezo, key->dose_stats.flow_rate * 60, (runtime + 59) / 60) != EZO_SUCCESS) {
-      LOG(LOG_ERR, "EZO Pump '%s' failed to turn on");
+    /*if (pump_dose_rate(&key->data.ezo, key->dose_stats.flow_rate * 60, (runtime + 59) / 60) != EZO_SUCCESS) {
+      LOG(LOG_ERR, "EZO Pump '%s' failed to turn on", key->label);
+      return;
+    }*/
+    float ml = (float)runtime * key->dose_stats.flow_rate;
+    int rc = pump_dose_volume(&key->data.ezo, ml);
+    if (rc != EZO_SUCCESS) {
+      LOG(LOG_ERR, "EZO Pump '%s' failed to start %.2f ml (status %d)", key->label, ml, rc);
       return;
     }
   } else {
@@ -429,14 +435,21 @@ void turn_pump_on(struct aquachemdata *acdata, acd_key_t *key, uint32_t duration
 void turn_pump_off(struct aquachemdata *acdata, acd_key_t *key, acd_state_t desired_state) {
   time_t start = get_timer_started_at(key);
   time_t now = time(NULL);
-  float dose_ml = 0;
+  float dose_ml = -1.0f;
 
   LOG(LOG_INFO, "Turning off %s\n", key->label);
 
   if (key->type == ACD_TYPE_GPIO_PMP) {
     relay_off(&key->data.gpio);
     key->ison = pump_is_on(&key->data.gpio);
-  } else if (key->type == ACD_TYPE_EZO_PMP) { // EZO pump needs to be set from different thread
+  } else if (key->type == ACD_TYPE_EZO_PMP) {
+    // Always send X: it is harmless if the dose already finished, and gating it on
+    // a status read is what let a failed read skip the stop.
+    int rc = EZO_ERROR;
+    for (int i = 0; i < 3 && rc != EZO_SUCCESS; i++) rc = pump_stop(&key->data.ezo);
+    if (rc != EZO_SUCCESS) LOG(LOG_ERR, "EZO Pump '%s' did NOT acknowledge stop", key->label);  // escalate: fault/alert
+    dose_ml = pump_get_dispensed_volume(&key->data.ezo);   // -1 on failure
+    /*
     pump_dose_status_t pump_reading = pump_get_dose_status(&key->data.ezo);
     if (pump_reading.status != EZO_SUCCESS) {
       LOG(LOG_ERR, "Reading pump %s state - turn_pump_off()\n",key->label);
@@ -444,7 +457,7 @@ void turn_pump_off(struct aquachemdata *acdata, acd_key_t *key, acd_state_t desi
     // Need to destinguish off from scheduler vs off from some force.
     if (true) { // If pump is force off (ie not from scheduler)
         if (pump_reading.is_pumping) { pump_stop(&key->data.ezo); }
-        dose_ml = pump_get_dispensed_volume(&key->data.ezo);  
+        dose_ml = pump_get_dispensed_volume(&key->data.ezo); */ 
     } else {
       // Wait for off
     }
@@ -455,6 +468,7 @@ void turn_pump_off(struct aquachemdata *acdata, acd_key_t *key, acd_state_t desi
   // Calculate actual runtime and log the event
   if (start > 0) {
     uint32_t actual_runtime = (uint32_t)(now - start);
+    if (dose_ml < 0) dose_ml = actual_runtime * key->dose_stats.flow_rate;   // GPIO, or a failed EZO read
     if (key->type != ACD_TYPE_EZO_PMP){ dose_ml = actual_runtime * key->dose_stats.flow_rate;}
     LOG_PUMP_EVENT(key, actual_runtime, key->value, dose_ml);
     post_dosing_event(key, actual_runtime, dose_ml);

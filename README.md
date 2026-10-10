@@ -69,9 +69,9 @@ Web interface and mobile app interface are identical, phone / app layout will si
 ## What it actually does
 
 ### Reads your water chemistry
-- **pH and ORP** via Atlas Scientific EZO circuits over I2C — the same industrial-grade sensors used in commercial pool controllers.
+- **pH, ORP & Conductivity** via Atlas Scientific EZO circuits over I2C — the same industrial-grade sensors used in commercial pool controllers.
 - **Temperature** via an EZO probe, a DS18B20 One-Wire sensor, or pulled in from an external MQTT source (e.g. your filter pump's built-in sensor).
-- **Filter pressure** via an I2C pressure sensor, useful for catching a clogging filter before it becomes a flow problem.
+- **Filter pressure** via an I2C or Atlas Scientific EZO pressure sensor, useful for catching a clogging filter before it becomes a flow problem.
 - **Any other Linux sysfs value** through a generic, regex-based sensor reader — if it shows up as a file under `/sys`, AquachemD can read it and publish it.
 - Optional **temperature-compensated pH readings**, since a probe's raw millivolt output drifts with water temperature.
 
@@ -151,7 +151,7 @@ If you're building or adapting the physical sensor housing, [`flow cell design.m
 The release install script handles the whole setup — downloading the correct architecture's binary, installing it as a systemd service, and setting up the web UI:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/aqualinkd/AquachemD/main/release/remote-install.sh | bash
+curl -sSL https://raw.githubusercontent.com/aqualinkd/AquachemD/main/release/remote-install.sh | sudo bash
 ```
 
 This installs AquachemD as a systemd service (`aquachemd.service`) that starts on boot, alongside a starter config at `/etc/aquachemd.conf` (or wherever your install script places it) that you'll edit to match your actual sensor addresses and pump wiring.
