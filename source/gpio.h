@@ -39,6 +39,16 @@ typedef struct {
   //char                       label[32];   // consumer label shown by gpioinfo
 } gpio_handle_t;
 
+
+typedef struct {
+    gpio_handle_t gpio;      // MUST be first: data.gpio aliases data.flow.gpio
+    uint64_t pulses;         // written by gpio_monitor via __atomic ops
+    uint64_t last_pulses;    // sensor thread only
+    uint64_t last_ns;        // sensor thread only (CLOCK_MONOTONIC)
+    float    k_factor;       // Hz per (L/min); from config, calibrate per unit
+} gpio_flow_t;
+
+
 // ─── Bus utilities ────────────────────────────────────────────────────────────
 
 // List all GPIO chips and their lines — equivalent to gpiodetect + gpioinfo.
@@ -57,6 +67,8 @@ void gpio_detect(bool deepscan, bool usesyslog);
 // Returns GPIO_SUCCESS or GPIO_ERROR
 int gpio_open(gpio_handle_t *h, const char *chip_path, int pin,
               gpio_dir_t direction, gpio_active_t active/*, const char *label*/);
+
+int gpio_open_pulse(gpio_handle_t *h, const char *chip_path, int pin);
 
 // Release the GPIO line and close the chip
 void gpio_close(gpio_handle_t *h);

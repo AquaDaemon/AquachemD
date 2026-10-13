@@ -459,6 +459,44 @@ void reset_dose_running_total(acd_key_t *key)
 }
 
 
+float calculate_flow_rate(acd_key_t *key)
+{
+  if (!key || key->type != ACD_TYPE_GPIO_FLOW) return -1.0f;
+
+  gpio_flow_t *f = &key->data.flow;
+
+  if (f->k_factor <= 0.0f) {
+    LOG(LOG_ERR, "%s: k_factor not set (%.3f), cannot calculate flow\n", key->label, f->k_factor);
+    return -1.0f;
+  }
+
+  uint64_t now_ns = mono_now_ns();
+  if (now_ns == 0) return -1.0f;
+
+  uint64_t count = __atomic_load_n(&f->pulses, __ATOMIC_RELAXED);
+
+  // First call just establishes the baseline
+  if (f->last_ns == 0) {
+    f->last_pulses = count;
+    f->last_ns     = now_ns;
+    return -1.0f;
+  }
+
+  uint64_t dt_ns = now_ns - f->last_ns;
+  if (dt_ns == 0) return -1.0f;
+
+  float hz  = (float)(count - f->last_pulses) * 1e9f / (float)dt_ns;
+  float lpm = hz / f->k_factor;                 // k_factor is Hz per (L/min)
+
+  f->last_pulses = count;
+  f->last_ns     = now_ns;
+
+  // Convert from litres/min (native) to the configured unit
+  if (key->uom == UOM_GALLONS_PER_MIN)          // whatever you name it in uom.h
+    lpm *= (ML_PER_LITER / ML_PER_GALLON);
+
+  return lpm;
+}
 
 /*
 bool IS_RUNNING_DOSE_ENABLED(acd_key_t *key)

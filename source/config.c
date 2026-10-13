@@ -2482,7 +2482,8 @@ const char *prefix_for_type(acd_type_t type) {
     case ACD_TYPE_MQTT_VALUE:     return "MQT";
     case ACD_TYPE_VIR_TANK:       return "TNK";
     case ACD_TYPE_GPIO_OUTPUT:
-    case ACD_TYPE_GPIO_INPUT:     return "GPIO";
+    case ACD_TYPE_GPIO_INPUT:
+    case ACD_TYPE_GPIO_FLOW:      return "GPIO";
     default:                      return "UNK";
   }
 }
@@ -2509,7 +2510,8 @@ static id_prefix_index_t prefix_index_for_type(acd_type_t type) {
     case ACD_TYPE_MQTT_VALUE:     return ID_PREFIX_MQT;
     case ACD_TYPE_VIR_TANK:       return ID_PREFIX_TNK;
     case ACD_TYPE_GPIO_OUTPUT:
-    case ACD_TYPE_GPIO_INPUT:     return ID_PREFIX_GPIO;
+    case ACD_TYPE_GPIO_INPUT:
+    case ACD_TYPE_GPIO_FLOW:      return ID_PREFIX_GPIO;
     default:                      return ID_PREFIX_UNK;
   }
 }
@@ -2896,6 +2898,8 @@ void add_gpio(const acd_staging_t *st) {
 
     if (new_node->type==ACD_TYPE_GPIO_OUTPUT) {
       set_pump_default_duration(new_node,_acdconfig_.switch_max_runtime / 2); // Default to half of the max runtime for switches
+    } else if (new_node->type==ACD_TYPE_GPIO_FLOW) {
+      ///
     }
 /*
     if (new_node->type==ACD_TYPE_GPIO_INPUT) {

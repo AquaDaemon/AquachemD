@@ -79,8 +79,9 @@ typedef enum {
     ACD_TYPE_SYSFS_VALUE,
     ACD_TYPE_MQTT_VALUE,
     ACD_TYPE_GPIO_INPUT,
+    ACD_TYPE_GPIO_FLOW,
     #define ACD_IN_FIRST ACD_TYPE_EZO_PH
-    #define ACD_IN_LAST  ACD_TYPE_GPIO_INPUT
+    #define ACD_IN_LAST  ACD_TYPE_GPIO_FLOW
 
 
     // Outputs (Actuators)
@@ -449,6 +450,7 @@ typedef struct acd_key_t {
     union {
         ezo_sensor_t   ezo;
         gpio_handle_t  gpio;
+        gpio_flow_t    flow; // This also has gpio_handle_t in it, so be careful, it's designed to use the exact came space.
         w1_sensor_t    w1;
         mqtt_sensor_t  mqtt;
         sysfs_sensor_t sysfs;  

@@ -458,9 +458,9 @@ void turn_pump_off(struct aquachemdata *acdata, acd_key_t *key, acd_state_t desi
     if (true) { // If pump is force off (ie not from scheduler)
         if (pump_reading.is_pumping) { pump_stop(&key->data.ezo); }
         dose_ml = pump_get_dispensed_volume(&key->data.ezo); */ 
-    } else {
+    /*} else {
       // Wait for off
-    }
+    }*/
   } else {
     LOG(LOG_ERR, "Add Code in state_manage.c - turn_pump_off()");
   }

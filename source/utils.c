@@ -758,7 +758,14 @@ const char* acd_state_to_set_attrib(acd_state_t status) {
   }
 }
 
-
+uint64_t mono_now_ns(void)
+{
+  struct timespec ts;
+  if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0) {
+    return 0;
+  }
+  return (uint64_t)ts.tv_sec * 1000000000ULL + (uint64_t)ts.tv_nsec;
+}
 
 #ifdef DUMMY_SENSORS
 // Small random float drift in range [-range, +range]

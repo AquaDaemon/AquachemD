@@ -109,13 +109,20 @@ void stop_gpio_monitor()
     }
 }
 
+typedef enum {
+MON_OUTPUT, 
+MON_COND, 
+MON_FLOW
+} monitor_type_t;
+
 // --- 1. Clean Context Structure ---
 // Bundles the metadata so we aren't juggling parallel arrays
 typedef struct
 {
     void *parent_obj;
     gpio_handle_t *handle;
-    bool is_condition;
+    //bool is_condition;
+    monitor_type_t type;
 } monitor_ctx_t;
 
 /*
@@ -165,7 +172,7 @@ void *gpio_monitor_worker(void *ptr)
             {
                 poll_fds[num_lines].fd = fd;
                 poll_fds[num_lines].events = 0; // We don't want event triggers, just errors
-                ctx_map[num_lines] = (monitor_ctx_t){curr, &curr->data.gpio, false};
+                ctx_map[num_lines] = (monitor_ctx_t){curr, &curr->data.gpio, MON_OUTPUT};
                 num_lines++;
             }
         }
@@ -177,7 +184,19 @@ void *gpio_monitor_worker(void *ptr)
             {
                 poll_fds[num_lines].fd = fd;
                 poll_fds[num_lines].events = POLLIN; // Wake up on edge changes
-                ctx_map[num_lines] = (monitor_ctx_t){curr, &curr->data.gpio, true};
+                ctx_map[num_lines] = (monitor_ctx_t){curr, &curr->data.gpio, MON_COND};
+                num_lines++;
+            }
+        }
+        else if ( (curr->type == ACD_TYPE_GPIO_FLOW) && curr->data.gpio.request)
+        {
+            // Register Conditions (Inputs) - Monitor for EVENTS + ERRORS
+            int fd = gpiod_line_request_get_fd(curr->data.gpio.request);
+            if (fd >= 0)
+            {
+                poll_fds[num_lines].fd = fd;
+                poll_fds[num_lines].events = POLLIN; // Wake up on edge changes
+                ctx_map[num_lines] = (monitor_ctx_t){curr, &curr->data.gpio, MON_FLOW};
                 num_lines++;
             }
         }
@@ -215,7 +234,8 @@ void *gpio_monitor_worker(void *ptr)
             }
 
             // --- HANDLE INPUT EVENTS (Conditions/Sensors) ---
-            if (ctx_map[i].is_condition && (poll_fds[i].revents & POLLIN))
+            //if (ctx_map[i].is_condition && (poll_fds[i].revents & POLLIN))
+            if (ctx_map[i].type == MON_COND && (poll_fds[i].revents & POLLIN))
             {
                 // Drain the libgpiod edge events so the interrupt clears
                 if (gpiod_line_request_read_edge_events(ctx_map[i].handle->request, event_buffer, 16) > 0)
@@ -242,6 +262,12 @@ void *gpio_monitor_worker(void *ptr)
                         }
                     }
                 }
+            }
+            else if (ctx_map[i].type == MON_FLOW && (poll_fds[i].revents & POLLIN))
+            {
+               int n = gpiod_line_request_read_edge_events(ctx_map[i].handle->request, event_buffer, 16);
+               if (n > 0)
+                 __atomic_fetch_add(&((acd_key_t *)ctx_map[i].parent_obj)->data.flow.pulses, (uint64_t)n, __ATOMIC_RELAXED);
             }
         }
     }

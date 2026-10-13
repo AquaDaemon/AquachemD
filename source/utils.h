@@ -82,7 +82,9 @@ const char* acd_state_to_str(acd_state_t state);
 const char* acd_state_to_set_attrib(acd_state_t status);
 const char* acd_condition_met_to_str(bool met);
 
-
+// Monotonic clock in nanoseconds. Unaffected by wall-clock changes (NTP, DST,
+// manual set), so safe for measuring elapsed intervals.
+uint64_t mono_now_ns(void);
 
 #define round(x) ((x)>=0?(long)((x)+0.5):(long)((x)-0.5))  
 //#define roundf(a) (float) ((a*100)/100) // 2 decimal places

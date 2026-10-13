@@ -581,6 +581,12 @@ reload_configuration:
         gpio_write(&curr->data.gpio, 0); // Turn pump off
         //sync_pump_state(&acddata, curr);
       }
+    } else if (curr->type == ACD_TYPE_GPIO_FLOW) {
+      acddata.haveConditions = true;   // gates the GPIO monitor start at line ~642
+      if (gpio_open_pulse(&curr->data.gpio, _acdconfig_.gpio_chip, curr->data.gpio.pin) != 0)
+        LOG(LOG_ERR, "Failed to open GPIO for %s, pin %d\n", curr->label, curr->data.gpio.pin);
+      curr->data.flow.last_ns = 0; // Must init this for the gpm to be caculated correctly.
+      //curr->data.flow.last_ns = mono_now_ns();   // small clock_gettime helper
     } else if (curr->type == ACD_TYPE_EZO_EC) {
       ec_set_k(&curr->data.ezo, curr->data.ezo.ec_sensor_k);
       ec_set_tds_factor(&curr->data.ezo, curr->data.ezo.ec_sensor_tds_factor);
@@ -899,6 +905,17 @@ reload_configuration:
               LOG(LOG_WARNING, "I2C Sensor '%s' child temp read failed (status %d)\n", key->child->label, reading.status);
               sensor_read_error(&acddata, key->child);  
             }
+          }
+        } break;
+
+        case ACD_TYPE_GPIO_FLOW: {
+          float rate = calculate_flow_rate(key);
+          if (rate >= 0.0f) {
+            LOG(reading_log_level, "%s : %.2f %s\n", key->label, rate, uom_to_display_str(key->uom));
+            ASSIGN_IF_CHANGED(key->value, rate, acddata.is_dirty, key->is_dirty);
+            set_key_state(&acddata, key, ACD_LED_ON);
+            key->err_cnt = 0;
+            update_sensor_average(key);
           }
         } break;
     

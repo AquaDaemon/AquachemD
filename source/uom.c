@@ -43,6 +43,9 @@ static const uom_alias_map_t uom_parse_table[] = {
     { "gallons",     UOM_GALLONS },
     { "gal",         UOM_GALLONS },
 
+    { "lpm",         UOM_LITERS_PER_MIN },
+    { "L/min",       UOM_LITERS_PER_MIN },
+    { "gpm",         UOM_GALLONS_PER_MIN },
 
     // Pressure Aliases
     { "psi",         UOM_PSI },
@@ -122,6 +125,8 @@ const char* uom_to_str(acd_uom_t uom) {
         case UOM_PPM:        return "ppm";
         case UOM_PSU:        return "PSU";
         case UOM_SPECIFIC_GRAVITY:return "SG";
+        case UOM_LITERS_PER_MIN:  return "lpm";
+        case UOM_GALLONS_PER_MIN: return "gpm";
         //case UOM_CUSTOM:     return "custom";
         case UOM_NONE:       
         default:             return "";
@@ -148,6 +153,9 @@ const char* uom_to_fullstr(acd_uom_t uom) {
         case UOM_PPM:        return "parts per million";
         case UOM_PSU:        return "practical salinity units";
         case UOM_SPECIFIC_GRAVITY:return "specific gravity";
+        case UOM_LITERS_PER_MIN:  return "litres per minute";
+        case UOM_GALLONS_PER_MIN: return "gallons per minute";
+        
         default:             return "";
     }
 }

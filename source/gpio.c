@@ -169,6 +169,37 @@ int gpio_open(gpio_handle_t *h, const char *chip_path, int pin,
   return GPIO_SUCCESS;
 }
 
+int gpio_open_pulse(gpio_handle_t *h, const char *chip_path, int pin)
+{
+  h->pin = pin; h->direction = GPIO_INPUT; h->active = GPIO_ACTIVE_HIGH;
+
+  h->chip = gpiod_chip_open(chip_path);
+  if (!h->chip) return GPIO_ERROR;
+
+  struct gpiod_line_settings *s = gpiod_line_settings_new();
+  struct gpiod_line_config   *lc = gpiod_line_config_new();
+  struct gpiod_request_config *rc = gpiod_request_config_new();
+  unsigned int off = (unsigned int)pin;
+  int ok = s && lc && rc;
+
+  if (ok) {
+    gpiod_line_settings_set_direction(s, GPIOD_LINE_DIRECTION_INPUT);
+    gpiod_line_settings_set_edge_detection(s, GPIOD_LINE_EDGE_RISING);
+    gpiod_line_settings_set_bias(s, GPIOD_LINE_BIAS_PULL_UP);   // open-collector output
+    gpiod_request_config_set_consumer(rc, AQUACHEMD_SHORT_NAME);
+    gpiod_request_config_set_event_buffer_size(rc, 1024);       // kernel may clamp it
+    ok = gpiod_line_config_add_line_settings(lc, &off, 1, s) == 0;
+  }
+  if (ok) h->request = gpiod_chip_request_lines(h->chip, rc, lc);
+
+  if (rc) gpiod_request_config_free(rc);
+  if (lc) gpiod_line_config_free(lc);
+  if (s)  gpiod_line_settings_free(s);
+
+  if (!ok || !h->request) { gpiod_chip_close(h->chip); h->chip = NULL; return GPIO_ERROR; }
+  return GPIO_SUCCESS;
+}
+
 void gpio_close(gpio_handle_t *h)
 {
   if (!h) return;

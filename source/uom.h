@@ -27,6 +27,8 @@ typedef enum {
     UOM_PPM,
     UOM_PSU,
     UOM_SPECIFIC_GRAVITY,
+    UOM_LITERS_PER_MIN,
+    UOM_GALLONS_PER_MIN
 } acd_uom_t;
 
 acd_uom_t   parse_uom(const char *str);
