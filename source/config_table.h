@@ -18,7 +18,7 @@ CFG_ENTRY( "main_label",             main_label,             "AquachemD",       
 CFG_ENTRY( "master_off_as_interlock_global", master_off_as_interlock, true,    CFG_BOOL,    0,                  0,                CFG_O_BOOL )
 
 
-CFG_ENTRY( "single_instance",        singleton,               true,                CFG_BOOL,    0,                  0,                CFG_O_BOOL )
+CFG_ENTRY( "single_instance",        singleton,               true,                CFG_BOOL,    CFG_ADVANCED,                  0,                CFG_O_BOOL )
 
 /* ---  GLOBAL SYSTEM & LOGGING --- */
 CFG_ENTRY( "listen_address",         listen_address,         "http://0.0.0.0:80",  CFG_STRING,  CFG_ADVANCED, 0,                NULL )
@@ -38,8 +38,8 @@ CFG_ENTRY( "mqtt_aqualinkd_topic",   mqtt_aqualinkd_topic,   "aqualinkd",       
 CFG_ENTRY( "mqtt_discovery_topic",   mqtt_discovery_topic,   "homeassistant",      CFG_STRING,  CFG_ADVANCED,                  0,                NULL )
 CFG_ENTRY( "mqtt_discovery_use_mac", mqtt_discovery_use_mac, true,                 CFG_BOOL,    CFG_ADVANCED,                                  0,                CFG_O_BOOL )
 CFG_ENTRY( "mqtt_timed_update",      mqtt_timed_update,      true,                 CFG_BOOL,    CFG_ADVANCED,                                  0,                CFG_O_BOOL )
-CFG_ENTRY( "mqtt_repost_sensors",    mqtt_repost_sensors,    false,                CFG_BOOL,    CFG_ADVANCED,                                  0,                CFG_O_BOOL )
-CFG_ENTRY( "mqtt_discovery_strict_availability",mqtt_strict_avail,false,           CFG_BOOL,    CFG_ADVANCED,                                  0,               CFG_O_BOOL )
+//CFG_ENTRY( "mqtt_repost_sensors",    mqtt_repost_sensors,    false,                CFG_BOOL,    CFG_ADVANCED,                                  0,                CFG_O_BOOL )
+//CFG_ENTRY( "mqtt_discovery_strict_availability",mqtt_strict_avail,false,           CFG_BOOL,    CFG_ADVANCED,                                  0,               CFG_O_BOOL )
 
 /* --- REMOTE INSTANCE --- */
 /*
@@ -111,6 +111,17 @@ CFG_ENTRY( "gpio_condition_required_state",keys,             NULL,              
 //CFG_ENTRY( "gpio_condition_scope_global",  keys,             NULL,                 CFG_BOOL,    CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "gpio_condition_severity",         keys,             NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "gpio_condition_met_delay",     keys,             NULL,                 CFG_INT,     CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+// sensor_condition_operator
+
+
+CFG_ENTRY( "sensor_condition_label",       keys,             NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "sensor_condition_ID",          keys,             NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "sensor_condition_source",      keys,             NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "sensor_condition_value",       keys,             NULL,                 CFG_FLOAT,   CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "sensor_condition_operator",    keys,             NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "sensor_condition_severity",    keys,             NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "sensor_condition_met_delay",   keys,             NULL,                 CFG_INT,     CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+
 
 
 CFG_ENTRY( "ph_sensor_label",        keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
@@ -212,11 +223,19 @@ CFG_ENTRY( "gpio_input_pin_mode",       keys,             NULL,                 
 CFG_ENTRY( "gpio_input_required_state", keys,             NULL,                 CFG_BOOL,    CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "gpio_input_interlock_scope",keys,             NULL,                 CFG_STRING,    CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 
-CFG_ENTRY( "gpio_output_label",          keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
-CFG_ENTRY( "gpio_output_ID",             keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
-CFG_ENTRY( "gpio_output_pin",            keys,                   NULL,                 CFG_INT,     CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
-CFG_ENTRY( "gpio_output_pin_mode",       keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
-CFG_ENTRY( "gpio_output_interlock_scope",keys,                   NULL,                 CFG_STRING,    CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "gpio_output_label",          keys,                NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "gpio_output_ID",             keys,                NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "gpio_output_pin",            keys,                NULL,                 CFG_INT,     CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "gpio_output_pin_mode",       keys,                NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "gpio_output_interlock_scope",keys,                NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+
+CFG_ENTRY( "gpio_pulse_label",          keys,                NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "gpio_pulse_ID",             keys,                NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "gpio_pulse_pin",            keys,                NULL,                 CFG_INT,     CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "gpio_pulse_interlock_scope",keys,                NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "gpio_pulse_k_factor",       keys,                NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "gpio_pulse_uom",            keys,                NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+
 
 CFG_ENTRY( "sysfs_sensor_label",      keys,                   NULL,                 CFG_STRING, CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "sysfs_sensor_ID",         keys,                   NULL,                 CFG_STRING, CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
@@ -243,6 +262,9 @@ CFG_ENTRY( "sysfs_sensor_uom",        keys,                   NULL,             
 #define CFG_O_I2C_PRS_DRIVERS "[\"PTE7300\",\"HSC/SSC\"]"
 
 #define CFG_O_GPIO_DIRECTION "[\"Input\",\"Output\"]"
+
+#define CFG_O_GPIO_PULSE_UOM "[\"RPM\",\"GPM\",\"LPM\"]"
+
 
 #define CFG_O_SCOPE      "[\"Local\",\"Global\"]"
 #define CFG_O_SCOPE_FULL "[\"Allow\",\"Local\",\"Global\"]"

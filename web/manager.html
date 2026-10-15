@@ -919,6 +919,8 @@
         enablebutton("cal_rtd_val");
         enablebutton("cal_prs");
         enablebutton("cal_prs_val");
+        enablebutton("cal_ec");
+        enablebutton("cal_ec_val");
         
     } else {
         document.getElementById("calibration_overlay").classList.remove("hide");
@@ -930,6 +932,8 @@
         disablebutton("cal_rtd_val");
         disablebutton("cal_prs");
         disablebutton("cal_prs_val"); 
+        disablebutton("cal_ec");
+        disablebutton("cal_ec_val"); 
     }
   }
 
@@ -1051,6 +1055,15 @@
           val = document.getElementById("cal_prs_val")?.value;
           text = "Pressure to "+ val +"psi";
           uom = "psi";
+          break;
+        case "cal_ec":
+          val = Number(document.getElementById("cal_ec_val")?.value);
+          if ( val === 0 ) {
+            text = "Conductivity dry sensor";
+          } else {
+            text = "Conductivity to "+ val +"µS";
+          }
+          uom = "µS";
           break;
         default :
           text = "Unknown";
@@ -2028,9 +2041,16 @@ function renderConfigTable() {
 
     // --- Helper: Build the correct HTML Input/Select ---
     function buildControl(field) {
+        if (field.advanced) {
+          if ( ! document.getElementById('show_advanced')?.checked) {
+            return null;
+          }
+        }
+
         if (field.readonly) {
             const span = document.createElement('span');
             span.textContent = field.value;
+            span.style.fontSize = '0.65em'; // using "small" is another option.
             return span;
         }
 
@@ -2102,7 +2122,7 @@ function renderConfigTable() {
         } else {
             // Standard Global Field
             const control = buildControl(field);
-            table.appendChild(createRow(0, field.key, control, null));
+            if (control != null) table.appendChild(createRow(0, field.key, control, null));
         }
     });
 
@@ -2159,7 +2179,7 @@ function renderConfigTable() {
         // Block Nested Fields
         block.fields.forEach(field => {
             const control = buildControl(field);
-            table.appendChild(createRow(1, field.key, control, null));
+            if (control != null) table.appendChild(createRow(1, field.key, control, null));
         });
 
        const sepRow = document.createElement('tr');
@@ -2211,7 +2231,20 @@ function renderConfigTable() {
     table.appendChild(addRow);
 }
 
-  </script>
+function update_ec_calibration_units(input) {
+    const value = Number(input.value);
+    const units = document.getElementById('cal_ec_units');
+
+    units.textContent = Number.isFinite(value)
+        ? (value === 0 ? ' (dry)' : ' µS')
+        : '';
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    update_ec_calibration_units(document.getElementById('cal_ec_val'));
+});
+
+</script>
 
 <body onload="init();init_collapsible();">
   <div class="wrapper">
@@ -2315,7 +2348,7 @@ function renderConfigTable() {
               <td align="center">
                 <input id="cal_ph" type="button" onclick="calibration(this);" value="pH"></input>
               </td>
-              <td align="center">
+              <td align="left">
                  <input id="cal_ph_val" type="text" value="0" size="5"> pH</input>
               </td>
               
@@ -2323,14 +2356,14 @@ function renderConfigTable() {
               <td align="center">
                 <input id="cal_orp" type="button" onclick="calibration(this);" value="ORP"></input>
               </td>
-              <td align="center">
+              <td align="left">
                  <input id="cal_orp_val" type="text" value="0" size="5"> mV</input>
               
               <tr>
               <td align="center">
                 <input id="cal_rtd" type="button" onclick="calibration(this);" value="Temperature"></input>
               </td>
-              <td align="center">
+              <td align="left">
                 <input id="cal_rtd_val" type="text" value="0" size="5"> &deg;C</input>
               </td>
              
@@ -2338,8 +2371,16 @@ function renderConfigTable() {
               <td align="center">
                 <input id="cal_prs" type="button" onclick="calibration(this);" value="Pressure"></input>
               </td>
-              <td align="center">
+              <td align="left">
                 <input id="cal_prs_val" type="text" value="0" size="5"> psi</input>
+              </td>
+
+              <tr>
+              <td align="center">
+                <input id="cal_ec" type="button" onclick="calibration(this);" value="Conductivity"></input>
+              </td>
+              <td align="left">
+                <input id="cal_ec_val" type="text" value="0" size="5" oninput="update_ec_calibration_units(this)"><span id="cal_ec_units"> (dry)</span>
               </td>
               
             </tr>
@@ -2403,7 +2444,7 @@ function renderConfigTable() {
             <tr>
               <td align="center" colspan="3">
                 <label>
-                  <input class="toggle-checkbox" type="checkbox" id="show_advanced" onclick="resetConfig(this);">
+                  <input class="toggle-checkbox" type="checkbox" id="show_advanced" onclick="renderConfigTable(); resetConfig(this);">
                   <div class="toggle-switch"></div>
                   <span class="toggle-label">Show&nbsp;Advanced&nbsp;Options</span>
                 </label>

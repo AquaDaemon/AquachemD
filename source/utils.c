@@ -758,6 +758,63 @@ const char* acd_state_to_set_attrib(acd_state_t status) {
   }
 }
 
+// utils.c  (needs <math.h> and <strings.h>)
+#define OP_EPSILON 1e-6
+
+acd_operator_t parse_operator(const char *str)
+{
+  if (str == NULL || *str == '\0') return ACD_OP_NONE;
+
+  if (strcasecmp(str, "eq") == 0) return ACD_OP_EQ;
+  if (strcasecmp(str, "ne") == 0) return ACD_OP_NE;
+  if (strcasecmp(str, "lt") == 0) return ACD_OP_LT;
+  if (strcasecmp(str, "le") == 0) return ACD_OP_LE;
+  if (strcasecmp(str, "gt") == 0) return ACD_OP_GT;
+  if (strcasecmp(str, "ge") == 0) return ACD_OP_GE;
+
+  return ACD_OP_INVALID;
+}
+
+const char *operator_to_str(acd_operator_t val)
+{
+  switch (val) {
+    case ACD_OP_EQ: return "eq";
+    case ACD_OP_NE: return "ne";
+    case ACD_OP_LT: return "lt";
+    case ACD_OP_LE: return "le";
+    case ACD_OP_GT: return "gt";
+    case ACD_OP_GE: return "ge";
+    default:        return "";     // NONE / INVALID: writer should skip empty
+  }
+}
+
+bool operator_eval(acd_operator_t op, double lhs, double rhs)
+{
+  if (isnan(lhs) || isnan(rhs)) return false;
+
+  bool same = fabs(lhs - rhs) <= OP_EPSILON * fmax(1.0, fabs(rhs));
+
+  switch (op) {
+    case ACD_OP_EQ: return same;
+    case ACD_OP_NE: return !same;
+    case ACD_OP_LT: return lhs <  rhs;
+    case ACD_OP_LE: return lhs <= rhs;
+    case ACD_OP_GT: return lhs >  rhs;
+    case ACD_OP_GE: return lhs >= rhs;
+    default:        return false;
+  }
+}
+
+// Same, but widens the release boundary once the condition is already met
+bool operator_eval_hyst(acd_operator_t op, double lhs, double rhs, double hyst, bool was_met)
+{
+  if (was_met && hyst > 0.0) {
+    if (op == ACD_OP_GT || op == ACD_OP_GE) rhs -= hyst;
+    else if (op == ACD_OP_LT || op == ACD_OP_LE) rhs += hyst;
+  }
+  return operator_eval(op, lhs, rhs);
+}
+
 uint64_t mono_now_ns(void)
 {
   struct timespec ts;
@@ -766,6 +823,9 @@ uint64_t mono_now_ns(void)
   }
   return (uint64_t)ts.tv_sec * 1000000000ULL + (uint64_t)ts.tv_nsec;
 }
+
+
+
 
 #ifdef DUMMY_SENSORS
 // Small random float drift in range [-range, +range]

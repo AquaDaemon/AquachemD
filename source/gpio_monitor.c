@@ -188,7 +188,7 @@ void *gpio_monitor_worker(void *ptr)
                 num_lines++;
             }
         }
-        else if ( (curr->type == ACD_TYPE_GPIO_FLOW) && curr->data.gpio.request)
+        else if ( (curr->type == ACD_TYPE_GPIO_PULSE) && curr->data.gpio.request)
         {
             // Register Conditions (Inputs) - Monitor for EVENTS + ERRORS
             int fd = gpiod_line_request_get_fd(curr->data.gpio.request);
@@ -267,7 +267,7 @@ void *gpio_monitor_worker(void *ptr)
             {
                int n = gpiod_line_request_read_edge_events(ctx_map[i].handle->request, event_buffer, 16);
                if (n > 0)
-                 __atomic_fetch_add(&((acd_key_t *)ctx_map[i].parent_obj)->data.flow.pulses, (uint64_t)n, __ATOMIC_RELAXED);
+                 __atomic_fetch_add(&((acd_key_t *)ctx_map[i].parent_obj)->data.gpio_pulse.pulses, (uint64_t)n, __ATOMIC_RELAXED);
             }
         }
     }

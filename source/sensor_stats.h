@@ -28,10 +28,10 @@ void reset_dose_running_total(acd_key_t *key);
 
 void set_pump_default_duration(acd_key_t *key, uint32_t default_duration);
 
-// Flow rate for an ACD_TYPE_GPIO_FLOW key, in key->uom, from the pulses counted
+// Flow rate / Pulse rate for an ACD_TYPE_GPIO_FLOW key, in key->uom, from the pulses counted
 // since the previous call. Returns a negative value if there's no usable reading
 // (first call, bad config, or clock failure).
-float calculate_flow_rate(acd_key_t *key);
+float calculate_pulse_value(acd_key_t *key);
 
 #define IS_RUNNING_DOSE_ENABLED(k) \
     ((k) && \

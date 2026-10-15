@@ -15,6 +15,9 @@
 #include "utils.h"
 
 
+#ifdef DUMMY_SENSORS
+  static void dummy_pulse_advance(acd_key_t *key, uint64_t now_ns);
+#endif
 
 void _update_sensor_average(sensor_stats_t *stats, float new_value/*, float tau_seconds*/);
 
@@ -458,7 +461,82 @@ void reset_dose_running_total(acd_key_t *key)
   key->is_dirty = true;
 }
 
+float calculate_pulse_value(acd_key_t *key)
+{
+  if (!key || key->type != ACD_TYPE_GPIO_PULSE) return -1.0f;
 
+  gpio_pulse_t *f = &key->data.gpio_pulse;
+
+  if (f->k_factor <= 0.0f) {
+    LOG(LOG_ERR, "%s: k_factor not set (%.3f), cannot calculate\n", key->label, f->k_factor);
+    return -1.0f;
+  }
+
+  uint64_t now_ns = mono_now_ns();
+  if (now_ns == 0) return -1.0f;
+
+/*  Uncomment if you want dummy test for this */
+#ifdef GPIO_DUMMY_SENSORS
+  dummy_pulse_advance(key, now_ns);
+#endif
+
+
+  uint64_t count = __atomic_load_n(&f->pulses, __ATOMIC_RELAXED);
+
+  if (f->last_ns == 0) {            // first call: baseline only
+    f->last_pulses = count;
+    f->last_ns     = now_ns;
+    return -1.0f;
+  }
+
+  uint64_t dt_ns = now_ns - f->last_ns;
+  if (dt_ns == 0) return -1.0f;
+
+  float hz = (float)(count - f->last_pulses) * 1e9f / (float)dt_ns;
+
+  f->last_pulses = count;
+  f->last_ns     = now_ns;
+
+  switch (key->uom) {
+    case UOM_RPM:
+      return hz * 60.0f / f->k_factor;                  // k_factor = pulses per rev
+    case UOM_GALLONS_PER_MIN:
+      return (hz / f->k_factor) * (ML_PER_LITER / ML_PER_GALLON);
+    case UOM_LITERS_PER_MIN:
+      return hz / f->k_factor;                          // k_factor = Hz per (L/min)
+    default:
+      LOG(LOG_ERR, "%s: unit not supported for pulse input\n", key->label);
+      return -1.0f;
+  }
+}
+
+
+
+#ifdef DUMMY_SENSORS
+// Stand-in for the gpio_monitor thread. Adds the pulses a real sensor would have
+// produced since the last poll, at a rate chosen to give a plausible reading in the
+// key's own unit, so k_factor and uom handling are exercised too.
+static void dummy_pulse_advance(acd_key_t *key, uint64_t now_ns)
+{
+  gpio_pulse_t *f = &key->data.gpio_pulse;
+  if (f->last_ns == 0 || now_ns <= f->last_ns) return;       // baseline call: nothing to add
+
+  float hz;
+  switch (key->uom) {
+    case UOM_RPM:             hz = (1200.0f + dummy_drift(50.0f)) * f->k_factor / 60.0f; break;
+    case UOM_GALLONS_PER_MIN: hz = (3.0f + dummy_drift(0.5f)) * f->k_factor * (ML_PER_GALLON / ML_PER_LITER); break;
+    default:                  hz = (12.0f + dummy_drift(2.0f)) * f->k_factor; break;   // L/min
+  }
+
+  // Optional: no flow for 1 minute in every 4, to exercise conditions / zero handling
+  // if ((time(NULL) / 60) % 4 == 3) hz = 0.0f;
+
+  uint64_t add = (uint64_t)((double)hz * (double)(now_ns - f->last_ns) / 1e9 + 0.5);
+  __atomic_fetch_add(&f->pulses, add, __ATOMIC_RELAXED);
+}
+#endif // DUMMY_SENSORS
+
+/*
 float calculate_flow_rate(acd_key_t *key)
 {
   if (!key || key->type != ACD_TYPE_GPIO_FLOW) return -1.0f;
@@ -497,6 +575,7 @@ float calculate_flow_rate(acd_key_t *key)
 
   return lpm;
 }
+*/
 
 /*
 bool IS_RUNNING_DOSE_ENABLED(acd_key_t *key)

@@ -581,11 +581,11 @@ reload_configuration:
         gpio_write(&curr->data.gpio, 0); // Turn pump off
         //sync_pump_state(&acddata, curr);
       }
-    } else if (curr->type == ACD_TYPE_GPIO_FLOW) {
+    } else if (curr->type == ACD_TYPE_GPIO_PULSE) {
       acddata.haveConditions = true;   // gates the GPIO monitor start at line ~642
       if (gpio_open_pulse(&curr->data.gpio, _acdconfig_.gpio_chip, curr->data.gpio.pin) != 0)
         LOG(LOG_ERR, "Failed to open GPIO for %s, pin %d\n", curr->label, curr->data.gpio.pin);
-      curr->data.flow.last_ns = 0; // Must init this for the gpm to be caculated correctly.
+      curr->data.gpio_pulse.last_ns = 0; // Must init this for the gpm to be caculated correctly.
       //curr->data.flow.last_ns = mono_now_ns();   // small clock_gettime helper
     } else if (curr->type == ACD_TYPE_EZO_EC) {
       ec_set_k(&curr->data.ezo, curr->data.ezo.ec_sensor_k);
@@ -908,14 +908,19 @@ reload_configuration:
           }
         } break;
 
-        case ACD_TYPE_GPIO_FLOW: {
-          float rate = calculate_flow_rate(key);
+        case ACD_TYPE_GPIO_PULSE: {
+          float rate = calculate_pulse_value(key);
           if (rate >= 0.0f) {
             LOG(reading_log_level, "%s : %.2f %s\n", key->label, rate, uom_to_display_str(key->uom));
             ASSIGN_IF_CHANGED(key->value, rate, acddata.is_dirty, key->is_dirty);
-            set_key_state(&acddata, key, ACD_LED_ON);
+            //set_key_state(&acddata, key, ACD_LED_ON);
+            key->ison = key->value>0.0f?true:false; // Should probably move somewhere else.
+            set_key_state(&acddata, key, key->ison?ACD_LED_ON:ACD_LED_OFF);
             key->err_cnt = 0;
             update_sensor_average(key);
+          } else {
+            LOG(LOG_WARNING, "GPIO Pulse Sensor '%s' read failed\n", key->label);
+            sensor_read_error(&acddata, key);
           }
         } break;
     
@@ -1039,15 +1044,21 @@ char *_upgrade_version = NULL;
 #include <stdlib.h>
 
 // Update this macro when you officially transition to your new GitHub organization
-#define AQUACHEMD_REPO "AqualinkD/AquachemD"
+#define AQUACHEMD_REPO "Aquadaemon/AquachemD"
 #define AQUACHEMD_REMOTE_INSTALL "remote-install.sh"
-
+/*
 void set_upgrade_version(char *version)
 {
   _upgrade_version = malloc( (sizeof(char*) * strlen(version)) + 2);
   snprintf(_upgrade_version, strlen(version)+1, version);
 }
+*/
 
+void set_upgrade_version(const char *version)
+{
+  free(_upgrade_version);
+  _upgrade_version = version ? strdup(version) : NULL;
+}
 
 
 bool start_upgrade(const char *version)
@@ -1061,7 +1072,7 @@ bool start_upgrade(const char *version)
     // This downloads the file to /tmp, closes the network connection, 
     // runs it detached using nohup, redirects output, and sends it to the background.
     snprintf(cmd, sizeof(cmd),
-             "curl -fsSl -H 'Accept: application/vnd.github.raw' "
+             "curl -fsSL -H 'Accept: application/vnd.github.raw' "
              "\"https://api.github.com/repos/%s/contents/release/%s\" -o /tmp/%s && "
              "chmod +x /tmp/%s && "
              "nohup /tmp/%s %s > /dev/null 2>&1 &",

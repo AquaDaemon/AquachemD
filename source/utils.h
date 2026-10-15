@@ -55,6 +55,12 @@ acd_scope_t parse_acd_scope(const char *str);
 const char* acd_scope_to_str( acd_scope_t scope);
 const char* acd_action_to_str( acd_scope_t scope); // Opposite of above
 
+
+acd_operator_t parse_operator(const char *str);
+const char *operator_to_str(acd_operator_t val);
+bool operator_eval(acd_operator_t op, double lhs, double rhs);
+
+
 /*
 uint8_t parse_statistics(const char *str);
 const char *statistics_to_str(uint8_t val);

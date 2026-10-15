@@ -261,6 +261,26 @@ bool process_sensor_request(char *buffer, size_t buf_size, char *ws_request, flo
       else {LOG(LOG_ERR, "Failed to read Pressure sensor, status %d", reading.status);}
       read_rtn = reading.status;
     }
+  
+  } else if (strcasecmp(ws_request, "cal_ec") == 0) {
+    ezo_sensor_t ec = { .address = EZO_EC_ADDR }; // Need to pass ADDR from UI in future
+    
+    if (is_calibration) {
+      if (calibrationValue <= 0) {
+        LOG(LOG_NOTICE, "Calibrating Conductivity - DRY");
+        cal_rtn = ec_calibrate_dry(&ec);
+      } else {
+        LOG(LOG_NOTICE, "Calibrating Conductivity - %.2f",calibrationValue);
+        cal_rtn = ec_calibrate(&ec, calibrationValue);
+      }
+    }
+    if (cal_rtn == EZO_SUCCESS) {
+      LOG(LOG_NOTICE, "Reading Conductivity");
+      ec_reading_t reading = ec_get_reading(&ec);
+      if (reading.status == EZO_SUCCESS){value=reading.conductivity; LOG(LOG_NOTICE, "Conductivity reading %.2f",value);}
+      else {LOG(LOG_ERR, "Failed to read Conductivity sensor, status %d", reading.status);}
+      read_rtn = reading.status;
+    }
   }
 
   f_end:

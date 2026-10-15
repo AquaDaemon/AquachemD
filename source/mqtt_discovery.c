@@ -238,6 +238,7 @@ void publish_mqtt_discovery(struct aquachemdata *acdata, struct mg_connection *n
                 break;
 
             case ACD_TYPE_I2C_PRS:
+            case ACD_TYPE_EZO_PRS:
                 if (curr->uom && curr->uom != UOM_NONE) {
                   snprintf(extra_json, sizeof(extra_json), 
                     ",\"unit_of_measurement\":\"%s\",\"device_class\":\"pressure\",\"state_class\":\"measurement\"",
@@ -288,9 +289,50 @@ void publish_mqtt_discovery(struct aquachemdata *acdata, struct mg_connection *n
                 icon = "mdi:cup-water";
                 break;
             
-            default:
-                should_publish = false;
-                break;
+            case ACD_TYPE_GPIO_INPUT:
+              hass_type = "binary_sensor";
+              break;
+
+            
+            case ACD_TYPE_EZO_EC:
+              if (curr->uom == UOM_MICROSIEMENS_CM) {
+                snprintf(extra_json, sizeof(extra_json), ",\"unit_of_measurement\":\"%s\",\"device_class\":\"conductivity\",\"state_class\":\"measurement\"",
+                         uom_to_str(curr->uom));
+                icon = "mdi:flash-outline";
+              } else {
+                snprintf(extra_json, sizeof(extra_json),
+                        ",\"unit_of_measurement\":\"%s\",\"state_class\":\"measurement\"",
+                        uom_to_str(curr->uom));
+                icon = (curr->uom == UOM_PPM) ? "mdi:water-opacity" :(curr->uom == UOM_PSU) ? "mdi:waves" : "mdi:scale-balance";   // SG
+              }
+              break;
+            
+            case ACD_TYPE_GPIO_PULSE:
+              if (curr->uom == UOM_LITERS_PER_MIN || curr->uom == UOM_GALLONS_PER_MIN) {
+                snprintf(extra_json, sizeof(extra_json),
+                         ",\"unit_of_measurement\":\"%s\",\"device_class\":\"volume_flow_rate\",\"state_class\":\"measurement\"",
+                         uom_to_str(curr->uom));
+              } else {
+                snprintf(extra_json, sizeof(extra_json),
+                         ",\"unit_of_measurement\":\"%s\",\"state_class\":\"measurement\"",
+                uom_to_str(curr->uom));
+              }
+              icon = "mdi:pipe";
+              break;
+
+            case ACD_TYPE_GPIO_OUTPUT:
+              hass_type = "select";
+              icon      = "mdi:toggle-switch-outline";
+              options   = "\"off\",\"on\"";
+              // 0->off, 1->on, 2/3 (enabled/disabled) -> off
+              state_mapper = "{% set mapper = {'0':'off','1':'on','2':'off','3':'off'} %}{{ mapper[value] if value in mapper else 'off' }}";
+              break;
+
+
+            case ACD_TYPE_NONE:
+            case ACD_TYPE_MQTT_VALUE:
+              should_publish = false;
+              break;
         }
 
         if (should_publish) {

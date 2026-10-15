@@ -56,6 +56,7 @@ typedef enum {
 
 typedef enum {
     ACD_TYPE_NONE = 0,
+    #define ACD_TYPE_MIN ACD_TYPE_NONE
     
     // Special
     ACD_TYPE_MASTER,
@@ -63,6 +64,7 @@ typedef enum {
     // Conditions
     ACD_TYPE_MQTT_COND,
     ACD_TYPE_GPIO_COND,
+    // ACD_TYPE_SENSOR_COND,  <-- Needs to be added for sensors that we want as conditions. SEE END OF FILE
     #define ACD_COND_FIRST ACD_TYPE_MQTT_COND
     #define ACD_COND_LAST  ACD_TYPE_GPIO_COND
 
@@ -79,9 +81,9 @@ typedef enum {
     ACD_TYPE_SYSFS_VALUE,
     ACD_TYPE_MQTT_VALUE,
     ACD_TYPE_GPIO_INPUT,
-    ACD_TYPE_GPIO_FLOW,
+    ACD_TYPE_GPIO_PULSE,
     #define ACD_IN_FIRST ACD_TYPE_EZO_PH
-    #define ACD_IN_LAST  ACD_TYPE_GPIO_FLOW
+    #define ACD_IN_LAST  ACD_TYPE_GPIO_PULSE
 
 
     // Outputs (Actuators)
@@ -97,6 +99,8 @@ typedef enum {
 
     // Self managed
     ACD_TYPE_VIR_TANK,
+
+    #define ACD_TYPE_MAX ACD_TYPE_VIR_TANK
 } acd_type_t;
 
 /* Grouping Macros */
@@ -112,6 +116,16 @@ typedef enum {
 
 // REturns true for any pump (GPIO or EZO)
 #define IS_PUMP(t)      ((t) >= ACD_PMP_FIRST && (t) <= ACD_PMP_LAST)
+
+
+// acd_types.h
+typedef enum {
+  ACD_OP_NONE = 0,   // not configured (mqtt_condition: legacy exact text match)
+  ACD_OP_EQ, ACD_OP_NE, ACD_OP_LT, ACD_OP_LE, ACD_OP_GT, ACD_OP_GE,
+  ACD_OP_INVALID     // text didn't match any operator; caller should reject the line
+} acd_operator_t;
+
+
 
 // Don't have a MQTT sensor code, so place it here.
 typedef struct {
@@ -450,7 +464,7 @@ typedef struct acd_key_t {
     union {
         ezo_sensor_t   ezo;
         gpio_handle_t  gpio;
-        gpio_flow_t    flow; // This also has gpio_handle_t in it, so be careful, it's designed to use the exact came space.
+        gpio_pulse_t   gpio_pulse; // This also has gpio_handle_t in it, so be careful, it's designed to use the exact came space.
         w1_sensor_t    w1;
         mqtt_sensor_t  mqtt;
         sysfs_sensor_t sysfs;  
@@ -524,3 +538,68 @@ typedef struct runtime_range_t{
 #define SD_TANK_LEVEL_SET_EVENT_ID "a7f82b1c4d3e4e899c125f6b7a8d90e1"
 
 #endif // ACD_TYPES_H_
+
+
+/*****************************
+
+For ACD_TYPE_SENSOR_COND  Making a condition from sensor.
+
+typedef enum { SC_OP_GT, SC_OP_LT } sensor_cond_op_t;  // LessThan GreaterThan
+
+typedef struct {
+  char            *source_id;     // ID of the sensor key to watch
+  sensor_cond_op_t op;
+  float            threshold;
+  float            hysteresis;    // prevents flapping around the threshold
+} sensor_cond_t;                  // add as data.scond
+
+// Reading sensors in main loop.
+// This probably needs to be done twice, once at end of loop and once at beginning.
+
+static void evaluate_sensor_conditions(struct aquachemdata *acdata)
+{
+  for (acd_key_t *c = acdata->keys; c; c = c->next) {
+    if (c->type != ACD_TYPE_SENSOR_COND) continue;
+    sensor_cond_t *sc = &c->data.scond;
+    acd_key_t *src = find_key_by_id(acdata, sc->source_id);   // new small helper
+
+    bool met;
+    if (!src || src->err_cnt > 0 || src->state != ACD_LED_ON) {
+      met = false;                         // fail safe: no trustworthy reading
+    } else if (sc->op == SC_OP_GT) {
+      met = c->met ? (src->value > sc->threshold - sc->hysteresis)
+                   : (src->value > sc->threshold);
+    } else {
+      met = c->met ? (src->value < sc->threshold + sc->hysteresis)
+                   : (src->value < sc->threshold);
+    }
+
+    if (met != c->met) {                   // only act on change
+      ASSIGN_IF_CHANGED(c->met, met, acdata->is_dirty, c->is_dirty);
+      // Don't call set_cond_state() as that forces a new poll cycle.
+      set_key_state(acdata, c, met ? ACD_LED_ON : ACD_LED_OFF);
+    }
+  }
+}
+
+Things to get right
+Deadlock on sensor scope. KC_SENSOR_GLOBAL sensors stop reading when the master scope is BLOCK. 
+         If the condition blocks the master, its source sensor stops updating, and the condition 
+         can never clear. Source sensors should be scope LOCAL or ALLOW (they keep reading under a hard interlock). 
+         Check this at config time and warn or override, as validate_interlock() does for missing scopes.
+
+Fail safe on missing data. For an interlock, “no reading” must mean “not met”. That covers a missing 
+         source ID, the pulse sensor’s first-call baseline (it returns -1 and never sets the state to ON), 
+         and read errors. I wrote err_cnt and state checks from how the poll loop uses them, 
+         but check what sensor_read_error() does to both before relying on that exact test.
+
+Hysteresis. Pressure and pulse readings jitter. Without it, a reading hovering at the threshold toggles met, 
+         restarts the delay timer, and flips the master between ON and ENABLED.
+
+Reference by ID. This is viable because config.c pins generated IDs and writes them back to the config, 
+         so they’re stable. Resolve the source at evaluation time (the key list is short) rather than caching a pointer, 
+         since a config reload rebuilds the list. There’s no find-by-ID helper yet (id_already_used() is the closest), so add one. 
+         Log a clear error at load if an ID doesn’t resolve.
+
+
+*/

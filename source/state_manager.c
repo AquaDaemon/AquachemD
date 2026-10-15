@@ -806,6 +806,7 @@ bool set_key_state(struct aquachemdata *acdata, acd_key_t *key, acd_state_t stat
       break;
 
     case ACD_TYPE_GPIO_INPUT:
+    case ACD_TYPE_GPIO_PULSE:
       // Same shape as every other sensor type -- ON/ENABLED/DISABLED (no manual OFF).
       if (state != ACD_LED_ON && state != ACD_LED_ENABLED && state != ACD_LED_DISABLED && state != ACD_LED_OFF) {
         goodState = false;

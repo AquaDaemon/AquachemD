@@ -368,6 +368,13 @@ Every block type also has an `*_ID` option (e.g. `ph_sensor_ID`, `gpio_doser_ID`
 | `gpio_output_pin_mode` | Pin output drive mode |
 | `gpio_output_interlock_scope` | Interlock scope for output execution boundaries |
 | --- | --- |
+| `gpio_pulse_label` | Label to identify the GPIO pulse input block (flow meters, fan tachometers, Hall sensors) |
+| `gpio_pulse_ID` | Unique ID for the GPIO pulse input block |
+| `gpio_pulse_pin` | Target GPIO pin number to count pulses on. Rising edges are counted and the internal pull-up is enabled, so open-collector sensors work directly. The pin is 3.3V only |
+| `gpio_pulse_uom` | Unit the pulse rate is reported in: `RPM`, `LPM` (litres per minute) or `GPM` (gallons per minute) |
+| `gpio_pulse_k_factor` | Converts the pulse rate into the chosen unit. For `RPM`: pulses per revolution (e.g. `2` for a standard PC fan tach). For `LPM` / `GPM`: the sensor's K factor in Hz per L/min, e.g. a datasheet formula of `F = 7.5 × Q` means `7.5`. If your datasheet gives pulses per litre, divide by 60. Calibrate against a measured volume for accuracy. Must be greater than 0 |
+| `gpio_pulse_interlock_scope` | How exposed this sensor is to interlocks raised elsewhere: `local` always read, regardless of severity. `global` reads through a soft interlock but stops at a hard one. Use `local` if a sensor condition depends on this reading |
+| --- | --- |
 | `sysfs_sensor_label` | Label to identify the SysFS sensor block |
 | `sysfs_sensor_ID` | Unique ID for the SysFS sensor block |
 | `sysfs_sensor_path` | Absolute Linux filesystem path to sysfs attribute file |
