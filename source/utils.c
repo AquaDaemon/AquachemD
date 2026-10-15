@@ -758,6 +758,7 @@ const char* acd_state_to_set_attrib(acd_state_t status) {
   }
 }
 
+/*
 // utils.c  (needs <math.h> and <strings.h>)
 #define OP_EPSILON 1e-6
 
@@ -814,6 +815,7 @@ bool operator_eval_hyst(acd_operator_t op, double lhs, double rhs, double hyst, 
   }
   return operator_eval(op, lhs, rhs);
 }
+*/
 
 uint64_t mono_now_ns(void)
 {

@@ -56,6 +56,7 @@ struct acdconfig
 
   bool post_condition;
   bool temp_compensated_ph;
+  bool temp_compensated_ec;
   bool log_zerorun_pump_events;
 
   uint32_t ph_default_dose_time;

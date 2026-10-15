@@ -90,6 +90,7 @@ CFG_ENTRY( "cert_dir",               cert_dir,               NULL,              
 
 CFG_ENTRY( "post_condition",         post_condition,         true,                 CFG_BOOL,    0,                                  0,                CFG_O_BOOL )
 CFG_ENTRY( "temp_compensated_ph",    temp_compensated_ph,    true,                 CFG_BOOL,    0,                                  0,                CFG_O_BOOL )
+CFG_ENTRY( "temp_compensated_ec",    temp_compensated_ec,    true,                 CFG_BOOL,    0,                                  0,                CFG_O_BOOL )
 CFG_ENTRY( "log_zerorun_pump_events",log_zerorun_pump_events,false,                CFG_BOOL,    0,                                  0,                CFG_O_BOOL )
 
 
