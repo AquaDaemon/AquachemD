@@ -125,8 +125,8 @@ const char* uom_to_str(acd_uom_t uom) {
         case UOM_PPM:        return "ppm";
         case UOM_PSU:        return "PSU";
         case UOM_SPECIFIC_GRAVITY:return "SG";
-        case UOM_LITERS_PER_MIN:  return "lpm";
-        case UOM_GALLONS_PER_MIN: return "gpm";
+        case UOM_LITERS_PER_MIN:  return "LPM";
+        case UOM_GALLONS_PER_MIN: return "GPM";
         //case UOM_CUSTOM:     return "custom";
         case UOM_NONE:       
         default:             return "";

@@ -266,12 +266,12 @@ void publish_mqtt_discovery(struct aquachemdata *acdata, struct mg_connection *n
                 icon = "mdi:thermometer";
                 break;
 
-            case ACD_TYPE_MQTT_COND:
+            case ACD_TYPE_MQTT_COND: // Will fall through to ACD_TYPE_GPIO_COND when set to yes
                 if (!_acdconfig_.mqtt_repost_sensors) {
                     should_publish = false;
                     break;
                 }
-                
+            case ACD_TYPE_SENSOR_COND: 
             case ACD_TYPE_GPIO_COND:
                 // Flow / Level alert
                 hass_type = "binary_sensor";

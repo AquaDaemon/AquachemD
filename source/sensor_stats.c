@@ -461,6 +461,8 @@ void reset_dose_running_total(acd_key_t *key)
   key->is_dirty = true;
 }
 
+#define PULSE_MIN_WINDOW_NS 500000000ULL   // 0.5 s: shorter than this, one pulse swamps the reading
+
 float calculate_pulse_value(acd_key_t *key)
 {
   if (!key || key->type != ACD_TYPE_GPIO_PULSE) return -1.0f;
@@ -484,30 +486,65 @@ float calculate_pulse_value(acd_key_t *key)
   uint64_t count = __atomic_load_n(&f->pulses, __ATOMIC_RELAXED);
 
   if (f->last_ns == 0) {            // first call: baseline only
+    GPDBG("pulse[%s]: baseline set, count=%llu", key->label, (unsigned long long)count);
+    f->last_pulses = count;
+    f->last_ns     = now_ns;
+    return -1.0f;
+  }
+
+  // These can't happen if only this function and the monitor thread touch the
+  // struct, so a hit means something else is writing it.
+  if (now_ns < f->last_ns) {
+    GPDBG("pulse[%s]: last_ns is %.3f s IN THE FUTURE (now=%llu last=%llu) - struct overwritten?",
+         key->label, (double)(f->last_ns - now_ns) / 1e9,
+         (unsigned long long)now_ns, (unsigned long long)f->last_ns);
+    return -1.0f;
+  }
+  if (count < f->last_pulses) {
+    GPDBG("pulse[%s]: counter WENT BACKWARDS (count=%llu last=%llu) - reset or clobbered",
+         key->label, (unsigned long long)count, (unsigned long long)f->last_pulses);
     f->last_pulses = count;
     f->last_ns     = now_ns;
     return -1.0f;
   }
 
   uint64_t dt_ns = now_ns - f->last_ns;
-  if (dt_ns == 0) return -1.0f;
+  // A window this short holds 0 or 1 pulses, which reads as 0 or a huge spike.  An extra
+  // poll can be forced right after a regular one (e.g. when a condition goes ON), so skip
+  // it and DON'T advance the baseline: the next regular poll measures the whole period.
+   if (dt_ns < PULSE_MIN_WINDOW_NS) {
+    GPDBG("pulse[%s]: window %.3f s too short, returning previous value %.3f", key->label, (double)dt_ns / 1e9, f->last_value);
+    return f->last_value;
+  }
 
-  float hz = (float)(count - f->last_pulses) * 1e9f / (float)dt_ns;
+  uint64_t delta = count - f->last_pulses;
+  float hz = (float)delta * 1e9f / (float)dt_ns;
+
+#ifdef GPIO_PULSE_DEBUG
+  uint64_t prev_pulses = f->last_pulses;
+#endif
 
   f->last_pulses = count;
   f->last_ns     = now_ns;
 
+  float value;
   switch (key->uom) {
-    case UOM_RPM:
-      return hz * 60.0f / f->k_factor;                  // k_factor = pulses per rev
-    case UOM_GALLONS_PER_MIN:
-      return (hz / f->k_factor) * (ML_PER_LITER / ML_PER_GALLON);
-    case UOM_LITERS_PER_MIN:
-      return hz / f->k_factor;                          // k_factor = Hz per (L/min)
+    case UOM_RPM:             value = hz * 60.0f / f->k_factor; break;
+    case UOM_GALLONS_PER_MIN: value = (hz / f->k_factor) * (ML_PER_LITER / ML_PER_GALLON); break;
+    case UOM_LITERS_PER_MIN:  value = hz / f->k_factor; break;
     default:
       LOG(LOG_ERR, "%s: unit not supported for pulse input\n", key->label);
       return -1.0f;
   }
+
+  GPDBG("pulse[%s] key=%p cnt@%p tid=%lu dt=%.3fs count=%llu prev=%llu delta=%llu hz=%.3f k=%.3f uom=%d -> %.3f%s",
+       key->label, (void *)key, (void *)&f->pulses, (unsigned long)pthread_self(),
+       (double)dt_ns / 1e9, (unsigned long long)count, (unsigned long long)prev_pulses,
+       (unsigned long long)delta, hz, f->k_factor, key->uom, value,
+       delta == 0 ? "   <-- ZERO PULSES IN WINDOW" : "");
+
+  f->last_value = value;
+  return value;
 }
 
 

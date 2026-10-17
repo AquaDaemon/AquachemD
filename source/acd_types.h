@@ -64,9 +64,9 @@ typedef enum {
     // Conditions
     ACD_TYPE_MQTT_COND,
     ACD_TYPE_GPIO_COND,
-    // ACD_TYPE_SENSOR_COND,  <-- Needs to be added for sensors that we want as conditions. SEE END OF FILE
+    ACD_TYPE_SENSOR_COND,  //<-- Needs to be added for sensors that we want as conditions. SEE END OF FILE
     #define ACD_COND_FIRST ACD_TYPE_MQTT_COND
-    #define ACD_COND_LAST  ACD_TYPE_GPIO_COND
+    #define ACD_COND_LAST  ACD_TYPE_SENSOR_COND
 
     // Inputs (Sensors)
     ACD_TYPE_EZO_PH,
@@ -428,7 +428,17 @@ typedef struct {
   float running_total_max_ml; // Maximum allowed for period (day?)
 } dose_stats_t;
 
-typedef struct acd_key_t {
+typedef struct acd_key_t acd_key_t;
+
+typedef struct { 
+  char *source_id; 
+  acd_operator_t op; 
+  float threshold; 
+  float hysteresis;
+  acd_key_t *source_sensor;
+} sensor_cond_t;
+
+/*typedef*/ struct acd_key_t {
     acd_type_t type;
     acd_state_t state;
     acd_scope_t scope;
@@ -470,11 +480,12 @@ typedef struct acd_key_t {
         sysfs_sensor_t sysfs;  
         i2c_sensor_t   i2c;
         tank_sensor_t  tank;
+        sensor_cond_t  sensor_cond;
     } data;
 
     struct acd_key_t *child;  // Virtual key if sensor has multiple outputs (like PTE7300 with pressure and temperature), or pump with tankvolume as child 
     struct acd_key_t *next;
-} acd_key_t;
+} /*acd_key_t*/;
 
 typedef struct runtime_range_t{
   float threshold;

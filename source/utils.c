@@ -10,6 +10,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <time.h>
+#include <math.h>
 
 #ifdef USE_SYSTEMD
 #include <systemd/sd-journal.h>
@@ -57,8 +58,24 @@ void init_logging_backend() {
 
 
 
-static void _do_log(const int msg_level, const char *format, va_list args) {
+// "hh:mm:ss.mmm " (local time, trailing space)
+static void _format_time_ms(char *buf, size_t len)
+{
+  struct timespec ts;
+  struct tm tm;
+
+  clock_gettime(CLOCK_REALTIME, &ts);
+  localtime_r(&ts.tv_sec, &tm);          // _r because logging is called from several threads
+  snprintf(buf, len, "%02d:%02d:%02d.%03ld ", tm.tm_hour, tm.tm_min, tm.tm_sec, ts.tv_nsec / 1000000L);
+}
+
+static void _do_log(const int msg_level, const bool with_time, const char *format, va_list args)
+{
     va_list args_copy;
+    char stamp[48] = "";
+
+    if (with_time)
+      _format_time_ms(stamp, sizeof(stamp));
 
 #ifdef USE_SYSTEMD
     if (_enable_journal) {
@@ -79,14 +96,20 @@ static void _do_log(const int msg_level, const char *format, va_list args) {
         message[--len] = '\0';
     }
 
-    printf("%-8.8s: %s\n", log_priority_to_str(msg_level), message);
+    printf("%-8.8s: %s%s\n", log_priority_to_str(msg_level), stamp, message);
     fflush(stdout);
 }
+/*
+static void _do_log(const int msg_level, const char *format, va_list args)
+{
+    _do_log(msg_level, false, format, args);
+}
+*/
 
 //  "V" Wrapper (The workhorse)
 void VLOG(const int msg_level, const char *format, va_list args) {
     if (msg_level <= _acdconfig_.log_level) {
-        _do_log(msg_level, format, args);
+      _do_log(msg_level, false, format, args);
     }
 }
 
@@ -104,8 +127,17 @@ void FORCE_LOG(const int msg_level, const char *format, ...) {
     va_start(args, format);
     
     // We skip VLOG (which checks levels) and go straight to the implementation
-    _do_log(msg_level, format, args);
-    
+    _do_log(msg_level, false, format, args);    
+    va_end(args);
+}
+
+/* Like LOG(), with a hh:mm:ss.mmm time stamp in the message */
+void FORCE_LOG_W_TIME(const int msg_level, const char *format, ...) {
+    va_list args;
+    va_start(args, format);
+    if (msg_level <= _acdconfig_.log_level) {
+        _do_log(msg_level, true, format, args);
+    }
     va_end(args);
 }
 
@@ -758,7 +790,7 @@ const char* acd_state_to_set_attrib(acd_state_t status) {
   }
 }
 
-/*
+
 // utils.c  (needs <math.h> and <strings.h>)
 #define OP_EPSILON 1e-6
 
@@ -815,7 +847,7 @@ bool operator_eval_hyst(acd_operator_t op, double lhs, double rhs, double hyst, 
   }
   return operator_eval(op, lhs, rhs);
 }
-*/
+
 
 uint64_t mono_now_ns(void)
 {

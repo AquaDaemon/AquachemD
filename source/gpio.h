@@ -46,6 +46,7 @@ typedef struct {
     uint64_t last_pulses;    // sensor thread only
     uint64_t last_ns;        // sensor thread only (CLOCK_MONOTONIC)
     float    k_factor;       // Hz per (L/min); from config, calibrate per unit
+    float last_value;        // last value returned; -1 until the first real measurement
 } gpio_pulse_t;
 
 

@@ -282,6 +282,16 @@ Every block type also has an `*_ID` option (e.g. `ph_sensor_ID`, `gpio_doser_ID`
 | `gpio_condition_severity` | Severity failed condition that defines interlock scope for sensors (e.g., `global` vs `local`) |
 | `gpio_condition_met_delay` | Delay duration (in seconds) before marking condition as met |
 | --- | --- |
+| `sensor_condition_label` | Label to identify the Sensor condition block |
+| `sensor_condition_ID` | Unique ID for the Sensor condition block |
+| `sensor_condition_source_id` | ID of the sensor to read for this condition |
+| `sensor_condition_threshold` | Threshold value of the sensor to read |
+| `sensor_condition_operator` | Is the Threshold value (Equal to, Less than, Greater than, Less than or equal, Greater or equal ) the sensor value for this condition to be met |
+| `sensor_condition_hysteresis` | Hysteresis value (see [Hysteresis](#hysteresis)) |
+| `sensor_condition_severity` | Severity failed condition that defines interlock scope for sensors (e.g., `global` vs `local`) |
+| `sensor_condition_met_delay` | Delay duration (in seconds) before marking condition as met |
+| --- | --- |
+
 | `ph_sensor_label` | Label to identify the pH sensor block |
 | `ph_sensor_ID` | Unique ID for the pH sensor block |
 | `ph_sensor_type` | Driver or hardware sub-type (e.g., `ezo`) |
@@ -383,6 +393,43 @@ Every block type also has an `*_ID` option (e.g. `ph_sensor_ID`, `gpio_doser_ID`
 | `sysfs_sensor_regex` | Regex pattern used to extract numerical value from sysfs text |
 | `sysfs_sensor_interlock_scope` | Interlock scope for sensor execution control |
 | `sysfs_sensor_uom` | Unit of measurement string displayed for readings |
+
+
+### Hysteresis
+Hysteresis stops a condition from flapping when a sensor reading hovers around the threshold.
+
+The problem
+
+Say you only want to dose when the pressure is above 10 psi, so the condition is gt 10. Real sensors jitter, so the readings might look like this over a few polls:
+```
+10.2   9.9   10.1   9.8   10.3
+```
+With a plain comparison the condition flips every time: met, not met, met, not met, met. Each flip does real work in your code:
+
+Going unmet immediately pushes the master to ENABLED/limited and can turn a running dosing pump off.
+Going met starts the met_delay timer, and the next dip cancels it.
+
+So a reading that’s essentially “about 10” can make the dosers stutter on and off.
+
+What hysteresis does
+
+It uses two different thresholds depending on the current state. With gt 10 and a hysteresis of 0.5:
+
+When unmet, the reading must rise above 10 to become met.
+When met, it stays met until the reading falls to 9.5 or below.
+
+Now the same readings behave like this:
+```
+10.2  -> becomes met
+9.9   -> still met (above 9.5)
+10.1  -> met
+9.8   -> met
+10.3  -> met
+```
+It only drops out when the pressure really falls, say to 9.4. For lt conditions it works the other way round: it releases once the value rises above the threshold plus the hysteresis.
+
+
+
 
 <!--
 ## Full configuration reference

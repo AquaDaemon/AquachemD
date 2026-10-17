@@ -565,8 +565,12 @@ reload_configuration:
 
   // Setup any specifics for GPIO / D1W etc
   for (acd_key_t *curr = acddata.keys; curr != NULL; curr = curr->next) {
-    if (curr->type == ACD_TYPE_GPIO_COND || curr->type == ACD_TYPE_GPIO_INPUT) {
+    if (curr->type == ACD_TYPE_SENSOR_COND || curr->type == ACD_TYPE_GPIO_COND || curr->type == ACD_TYPE_MQTT_COND ) {
       acddata.haveConditions = true;
+    }
+    
+    if (curr->type == ACD_TYPE_GPIO_COND || curr->type == ACD_TYPE_GPIO_INPUT) {
+      //acddata.haveConditions = true;
       LOG(LOG_DEBUG,"Setting up GPIO %s: %s, pin %d\n", (curr->type == ACD_TYPE_GPIO_COND?"Condition":"Input"), curr->label, curr->data.gpio.pin);
       if (gpio_open(&curr->data.gpio, _acdconfig_.gpio_chip, curr->data.gpio.pin, GPIO_INPUT, curr->data.gpio.active) != 0) {
         LOG(LOG_ERR, "Failed to open GPIO for %s, pin %d\n", curr->label, curr->data.gpio.pin);
@@ -582,10 +586,11 @@ reload_configuration:
         //sync_pump_state(&acddata, curr);
       }
     } else if (curr->type == ACD_TYPE_GPIO_PULSE) {
-      acddata.haveConditions = true;   // gates the GPIO monitor start at line ~642
+      //acddata.haveConditions = true;   // gates the GPIO monitor start at line ~642
       if (gpio_open_pulse(&curr->data.gpio, _acdconfig_.gpio_chip, curr->data.gpio.pin) != 0)
         LOG(LOG_ERR, "Failed to open GPIO for %s, pin %d\n", curr->label, curr->data.gpio.pin);
       curr->data.gpio_pulse.last_ns = 0; // Must init this for the gpm to be caculated correctly.
+      curr->data.gpio_pulse.last_value = -1.0f;
       //curr->data.flow.last_ns = mono_now_ns();   // small clock_gettime helper
     } else if (curr->type == ACD_TYPE_EZO_EC) {
       ec_set_k(&curr->data.ezo, curr->data.ezo.ec_sensor_k);
@@ -650,6 +655,8 @@ reload_configuration:
     state_change_request(&acddata, acddata.keys, ACD_LED_ON);
     //acddata.keys->state = ACD_LED_ON;
   }
+
+  //check_master(&acddata);
 
   start_gpio_monitor(&acddata);
 
@@ -779,12 +786,12 @@ reload_configuration:
         } break;
         case ACD_TYPE_EZO_PH: {
           ph_reading_t ph_reading;
-          if (_acdconfig_.temp_compensated_ph == false) {
+          if (_acdconfig_.temp_comp_ph == false) {
             ph_reading = ph_get_reading(&key->data.ezo);
           } else if ( temp_for_compensated_readings != UNKNOWN) {
-            if (temp_for_compensated_readings > _acdconfig_.ph_reading_temp_max || temp_for_compensated_readings < _acdconfig_.ph_reading_temp_min ) {
+            if (temp_for_compensated_readings > _acdconfig_.temp_comp_reading_max || temp_for_compensated_readings < _acdconfig_.temp_comp_reading_min ) {
               char buf[128];
-              sprintf(buf, "Water temperature %.2f°C too %s for Ph reading", temp_for_compensated_readings, temp_for_compensated_readings < _acdconfig_.ph_reading_temp_min?"cold":"hot");
+              sprintf(buf, "Water temperature %.2f°C too %s for Ph reading", temp_for_compensated_readings, temp_for_compensated_readings < _acdconfig_.temp_comp_reading_min?"cold":"hot");
               LOG(LOG_WARNING, "%s\n", buf);
               set_key_state(&acddata, key, ACD_LED_OFF);
               update_display_message(&acddata, ACD_MSG_CONDITION_FAILED, buf);
@@ -842,9 +849,17 @@ reload_configuration:
         case ACD_TYPE_EZO_EC: {
           ec_reading_t ec_reading;
 
-          if (_acdconfig_.temp_compensated_ec == false) {
+          if (_acdconfig_.temp_comp_ec == false) {
             ec_reading = ec_get_reading(&key->data.ezo);
           } else if ( temp_for_compensated_readings != UNKNOWN) {
+            if (temp_for_compensated_readings > _acdconfig_.temp_comp_reading_max || temp_for_compensated_readings < _acdconfig_.temp_comp_reading_min ) {
+              char buf[128];
+              sprintf(buf, "Water temperature %.2f°C too %s for EC reading", temp_for_compensated_readings, temp_for_compensated_readings < _acdconfig_.temp_comp_reading_min?"cold":"hot");
+              LOG(LOG_WARNING, "%s\n", buf);
+              set_key_state(&acddata, key, ACD_LED_OFF);
+              update_display_message(&acddata, ACD_MSG_CONDITION_FAILED, buf);
+              break;
+            }
             LOG(reading_log_level, "Using %s, %.2f for EC compensated reading", master_temp_label?master_temp_label:"", temp_for_compensated_readings);
             ec_reading = ec_get_reading_compensated(&key->data.ezo, temp_for_compensated_readings);
           } else {
@@ -924,9 +939,9 @@ reload_configuration:
           if (rate >= 0.0f) {
             LOG(reading_log_level, "%s : %.2f %s\n", key->label, rate, uom_to_display_str(key->uom));
             ASSIGN_IF_CHANGED(key->value, rate, acddata.is_dirty, key->is_dirty);
-            //set_key_state(&acddata, key, ACD_LED_ON);
+            set_key_state(&acddata, key, ACD_LED_ON);
             key->ison = key->value>0.0f?true:false; // Should probably move somewhere else.
-            set_key_state(&acddata, key, key->ison?ACD_LED_ON:ACD_LED_OFF);
+            //set_key_state(&acddata, key, key->ison?ACD_LED_ON:ACD_LED_OFF);
             key->err_cnt = 0;
             update_sensor_average(key);
           } else {
@@ -953,6 +968,7 @@ reload_configuration:
         case ACD_TYPE_EZO_PMP:
         case ACD_TYPE_MQTT_COND:
         case ACD_TYPE_GPIO_COND:
+        case ACD_TYPE_SENSOR_COND:
         case ACD_TYPE_MQTT_VALUE:
         break;
 
@@ -961,6 +977,7 @@ reload_configuration:
       }
     }
 
+    evaluate_sensor_conditions(&acddata);
 
 next_wake:
 

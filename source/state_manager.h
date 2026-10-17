@@ -17,4 +17,6 @@ uint32_t caculate_dose_time(struct aquachemdata *acdata, acd_key_t *key);
 
 void validate_pumps_against_tanks(struct aquachemdata *acdata);
 
+void evaluate_sensor_conditions(struct aquachemdata *a);
+
 #endif

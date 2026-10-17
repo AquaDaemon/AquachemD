@@ -1139,7 +1139,7 @@ void mqtt_broadcast_aquachemdstate(struct mg_connection *nc, bool force_all)
     
     if (!curr->is_dirty && !force_all) {continue;}
 
-    if (IS_CONDITION(curr->type) && _acdconfig_.post_condition) {
+    if (IS_CONDITION(curr->type) && _acdconfig_.mqtt_post_conditions) {
       send_mqtt_acd_state_msg(nc, curr->ID, curr->met?ACD_LED_ON:ACD_LED_OFF);
     } else if (IS_OUTPUT(curr->type)) {
       // For homekit, we need to set the timer information before the state information.

@@ -571,6 +571,7 @@ bool _state_change_request(struct aquachemdata *acdata, acd_key_t *key, acd_stat
 
     case ACD_TYPE_MQTT_COND:
     case ACD_TYPE_GPIO_COND:
+    case ACD_TYPE_SENSOR_COND:
       // The only time we "request" a state change on a condition is if it's from DELAY to ON.
       if (state == ACD_LED_DELAY || isMASKSET(key->flags, DELAY_ACTIVE)) {
         // Make sure the condition is still met.
@@ -762,6 +763,7 @@ bool set_key_state(struct aquachemdata *acdata, acd_key_t *key, acd_state_t stat
       break;
     case ACD_TYPE_MQTT_COND:
     case ACD_TYPE_GPIO_COND:
+    case ACD_TYPE_SENSOR_COND:
       goodState = set_cond_state(acdata,  key, state);
       break;
     case ACD_TYPE_EZO_PH:
@@ -924,6 +926,39 @@ void validate_pumps_against_tanks(struct aquachemdata *acdata)
         removeMASK(key->flags, SET_OFF_DUE_TO_TANK_VOLUME);
         set_key_state(acdata, key, ACD_LED_ENABLED);
       }
+    }
+  }
+}
+
+
+
+
+void evaluate_sensor_conditions(struct aquachemdata *a)
+{
+  for (acd_key_t *c = a->keys; c; c = c->next) {
+    if (c->type != ACD_TYPE_SENSOR_COND) continue;
+    sensor_cond_t *sc = &c->data.sensor_cond;
+    //acd_key_t *src = find_key_by_id(a, sc->source_id);
+
+    acd_key_t *src = sc->source_sensor;
+
+    if (!src) {
+      LOG(LOG_ERR, "Can't find id `%s` for condition `%s`", sc->source_id, c->label);
+      return;
+    }
+
+    bool met = false;                                   // fail safe
+    if (src && src->err_cnt == 0 && src->state == ACD_LED_ON)
+      met = operator_eval_hyst(sc->op, src->value, sc->threshold, sc->hysteresis, c->met);
+
+    LOG(LOG_DEBUG, "Evaluated %s against %s (is %.2f %s %.2f) = %s",
+        c->label, src->label, 
+        sc->threshold, operator_to_str(sc->op), src->value,
+        (met?"SAFE":"UNSAFE"));
+
+    if (met != c->met) {
+      ASSIGN_IF_CHANGED(c->met, met, a->is_dirty, c->is_dirty);
+      set_key_state(a, c, met ? ACD_LED_ON : ACD_LED_OFF);
     }
   }
 }

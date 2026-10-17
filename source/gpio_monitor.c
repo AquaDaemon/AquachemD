@@ -15,7 +15,7 @@
 #include "utils.h"
 #include "gpio.h"
 #include "state_manager.h"
-
+#include "sensor_stats.h"
 
 #define MAX_GPIO_FDS 20
 
@@ -266,8 +266,21 @@ void *gpio_monitor_worker(void *ptr)
             else if (ctx_map[i].type == MON_FLOW && (poll_fds[i].revents & POLLIN))
             {
                int n = gpiod_line_request_read_edge_events(ctx_map[i].handle->request, event_buffer, 16);
-               if (n > 0)
-                 __atomic_fetch_add(&((acd_key_t *)ctx_map[i].parent_obj)->data.gpio_pulse.pulses, (uint64_t)n, __ATOMIC_RELAXED);
+               //if (n > 0) {
+               //  __atomic_fetch_add(&((acd_key_t *)ctx_map[i].parent_obj)->data.gpio_pulse.pulses, (uint64_t)n, __ATOMIC_RELAXED);
+               //);
+               if (n > 0) {
+                 acd_key_t *k = (acd_key_t *)ctx_map[i].parent_obj;
+                 gpio_pulse_t *fp = &k->data.gpio_pulse;
+                 uint64_t total = __atomic_add_fetch(&fp->pulses, (uint64_t)n, __ATOMIC_RELAXED);
+                 if ((total / 25) != ((total - (uint64_t)n) / 25))        // throttle: about every 25 pulses
+                    GPDBG("pulse-mon[%s] key=%p cnt@%p +%d total=%llu",k->label, (void *)k, (void *)&fp->pulses, n, (unsigned long long)total);
+
+               } else if (n < 0) {
+                 GPDBG("pulse-mon: read_edge_events failed (%d)", n);
+               }
+               if (poll_fds[i].revents & (POLLERR | POLLHUP | POLLNVAL))
+                 GPDBG("pulse-mon: fd %d revents=0x%x", poll_fds[i].fd, poll_fds[i].revents);
             }
         }
     }

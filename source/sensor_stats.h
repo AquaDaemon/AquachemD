@@ -4,6 +4,18 @@
 #include "acd_types.h"
 #include "aquachemd.h"
 
+
+
+
+// Extra debug messages for GPIO Pulse monitoring / debugging
+//#define GPIO_PULSE_DEBUG
+#ifdef GPIO_PULSE_DEBUG
+  #define GPDBG(...) FORCE_LOG_W_TIME(LOG_NOTICE, __VA_ARGS__)
+#else
+  #define GPDBG(...) do { } while (0)
+#endif
+
+
 // Time constants defined in seconds
 //#define FILTER_TAU_DAILY   86400.0f   // 1 Day (24 hours)
 //#define FILTER_TAU_WEEKLY  604800.0f  // 7 Days

@@ -86,6 +86,7 @@ typedef struct {
     uint8_t flags;
     acd_uom_t uom;
     acd_uom_t uom2;
+    acd_operator_t operator;
 } acd_staging_t;
 
 static acd_staging_t _staging;
@@ -100,6 +101,7 @@ void add_sensor_d1w(const acd_staging_t *st);
 void add_sensor_mqtt(const acd_staging_t *st);
 void add_sensor_sysfs(const acd_staging_t *st);
 void add_sensor_i2c(const acd_staging_t *st);
+void add_condition_sensor(const acd_staging_t *st);
 
 
 void init_cfg_parameters() {
@@ -144,6 +146,7 @@ void clear_staging() {
     _staging.scope = ACD_SCOPE_UNKNOWN;
     _staging.uom = UOM_NONE;
     _staging.uom2 = UOM_NONE;
+    _staging.operator = ACD_OP_NONE;
 }
 
 void action_staging() {
@@ -179,6 +182,9 @@ void action_staging() {
             break;
         case ACD_TYPE_GPIO_COND:
             add_condition_gpio(&_staging);
+            break;
+        case ACD_TYPE_SENSOR_COND:
+            add_condition_sensor(&_staging);
             break;
         case ACD_TYPE_SYSFS_VALUE:
             add_sensor_sysfs(&_staging);
@@ -222,8 +228,42 @@ bool parse_dose_range(runtime_range_t *steps, uint8_t *count, const char *value,
     return true;
 }
 
+
+/* --- Legacy config name mapping to new names --- */
+
+typedef struct {
+    const char *legacy_name;
+    const char *current_name;
+} config_legacy_name_t;
+
+static const config_legacy_name_t config_legacy_names[] = {
+    { "ph_reading_temp_max", "temp_compensated_reading_max" },  // Changed in v1.0.11
+    { "ph_reading_temp_min", "temp_compensated_reading_min" },  // Changed in v1.0.11
+    { "post_condition",      "mqtt_post_conditions" },          // Changed in v1.0.11
+    { "temp_compensated_ph", "use_temp_compensated_ph" },       // Changed in v1.0.11
+    { "temp_compensated_ec", "use_temp_compensated_ec" },       // Changed in v1.0.11
+};
+
+#define CONFIG_LEGACY_NAME_COUNT \
+    (sizeof(config_legacy_names) / sizeof(config_legacy_names[0]))
+
+const char *resolve_legacy_config_name(const char *param)
+{
+  for (size_t i = 0; i < CONFIG_LEGACY_NAME_COUNT; i++)
+  {
+    if (strncasecmp(param, config_legacy_names[i].legacy_name, strlen(config_legacy_names[i].legacy_name)) == 0)
+      return config_legacy_names[i].current_name;
+  }
+
+  return param;
+}
+
+/* --- Normal passing of each config line --- */
+
 bool setConfigValue(struct aquachemdata *acdata, char *param, char *value) {
     value = cleanwhitespace(value);
+
+    param = (char *)resolve_legacy_config_name(param);
 
     LOG(LOG_DEBUG,"Parsing config parm %s\n",param);
 
@@ -261,6 +301,7 @@ bool setConfigValue(struct aquachemdata *acdata, char *param, char *value) {
                     else if (STARTS_WITH_IC(param, "gpio_input")) _staging.pending_type = ACD_TYPE_GPIO_INPUT;
                     else if (STARTS_WITH_IC(param, "gpio_output")) _staging.pending_type = ACD_TYPE_GPIO_OUTPUT;
                     else if (STARTS_WITH_IC(param, "gpio_pulse")) _staging.pending_type = ACD_TYPE_GPIO_PULSE;
+                    else if (STARTS_WITH_IC(param, "sensor_condition")) _staging.pending_type = ACD_TYPE_SENSOR_COND;
                     //else if (STARTS_WITH_IC(param, "ezo_doser")) {_staging.pending_type = ACD_TYPE_EZO_PMP; _staging.address = EZO_PMP_ADDR;}
                 }
                 else if (strstr(param, "_type")) {
@@ -290,6 +331,10 @@ bool setConfigValue(struct aquachemdata *acdata, char *param, char *value) {
                       _staging.address = PTE7300_ADDR_DEFAULT;
                     }
                     
+                }
+                else if (STARTS_WITH_IC(param, "sensor_condition_source_id")) {
+                    if (_staging.char_value) free(_staging.char_value);
+                    _staging.char_value = strdup(value);
                 }
                 else if (KEY_ENDS_WITH_IC(param, "_ID")) {
                     if (_staging.ID) free(_staging.ID);
@@ -368,6 +413,10 @@ bool setConfigValue(struct aquachemdata *acdata, char *param, char *value) {
                 else if (KEY_ENDS_WITH_IC(param, "_doser_tank_uom")) {
                     _staging.uom2 = parse_uom(value);
                 }
+                //else if (strstr(param, "_sensor_uom")) {
+                else if (KEY_ENDS_WITH_IC(param, "_uom")) {
+                    _staging.uom = parse_uom(value);
+                }
                 else if (KEY_ENDS_WITH_IC(param, "_doser_tank_min_volume")) {
                     _staging.value3 = strtof(value, NULL);
                 }
@@ -389,11 +438,7 @@ bool setConfigValue(struct aquachemdata *acdata, char *param, char *value) {
                     if (_staging.char_value) free(_staging.char_value);
                     _staging.char_value = strdup(value);
                 }
-                else if (strstr(param, "_sensor_uom")) {
-                    // temp_sensor_uom
-                    // sysfs_sensor_uom
-                    _staging.uom = parse_uom(value);
-                }
+                
                 else if (strncasecmp(param, "sysfs_sensor_scale", 18) == 0) {
                     _staging.value2 = strtof(value, NULL);
                 }
@@ -414,6 +459,15 @@ bool setConfigValue(struct aquachemdata *acdata, char *param, char *value) {
                 }
                 else if (strncasecmp(param, "gpio_pulse_k_factor", 19) == 0) {
                     _staging.value = strtof(value, NULL);
+                }
+                else if (STARTS_WITH_IC(param, "sensor_condition_operator")) {
+                    _staging.operator = parse_operator(value);
+                }
+                else if (STARTS_WITH_IC(param, "sensor_condition_threshold")) {
+                    _staging.value2 = strtof(value, NULL);
+                }
+                else if (STARTS_WITH_IC(param, "sensor_condition_hysteresis")) {
+                    _staging.value3 = strtof(value, NULL);
                 }
                 return true;
             }
@@ -514,6 +568,9 @@ void free_config()
         }
         if (curr->type == ACD_TYPE_SYSFS_VALUE) {
             if (curr->data.sysfs.regex_pattern) free(curr->data.sysfs.regex_pattern);
+        }
+        if (curr->type == ACD_TYPE_SENSOR_COND) {
+          if (curr->data.sensor_cond.source_id) free(curr->data.sensor_cond.source_id);
         }
         
         free(curr);
@@ -771,6 +828,9 @@ int save_aquachem_config_json(const char* inBuf, int inSize, char* outBuf, int o
         cJSON_ArrayForEach(block, blocks) {
             fprintf(fp, "\n"); // Add spacing between blocks
 
+            const char *prefix = NULL;
+            const char *sensor_type = NULL;
+
             // --- THE FIX: Explicitly extract and write the Label FIRST ---
             cJSON *label = cJSON_GetObjectItem(block, "label");
             cJSON *type_id = cJSON_GetObjectItem(block, "block_type_id");
@@ -782,10 +842,7 @@ int save_aquachem_config_json(const char* inBuf, int inSize, char* outBuf, int o
 
                 cJSON *ID = cJSON_GetObjectItem(block, "ID");
                 const char *id = cJSON_GetStringValue(ID);
-
-                const char *prefix = NULL;
-                const char *sensor_type = NULL;
-                
+     
                 acd_type_t acd_type = ACD_TYPE_NONE;
 
                 if (type >= ACD_TYPE_MIN && type <= ACD_TYPE_MAX) {acd_type = type;}
@@ -793,6 +850,7 @@ int save_aquachem_config_json(const char* inBuf, int inSize, char* outBuf, int o
                 switch (acd_type) {
                     case ACD_TYPE_MQTT_COND:   prefix = "mqtt_condition"; break;
                     case ACD_TYPE_GPIO_COND:   prefix = "gpio_condition"; break;
+                    case ACD_TYPE_SENSOR_COND: prefix = "sensor_condition"; break;
                     case ACD_TYPE_EZO_PH:      prefix = "ph_sensor";   sensor_type = "ezo"; break;
                     case ACD_TYPE_EZO_ORP:     prefix = "orp_sensor";  sensor_type = "ezo"; break;
                     case ACD_TYPE_EZO_PRS:     prefix = "prs_sensor";  sensor_type = "ezo"; break;
@@ -832,8 +890,15 @@ int save_aquachem_config_json(const char* inBuf, int inSize, char* outBuf, int o
                 cJSON *fld;
                 cJSON_ArrayForEach(fld, b_fields) {
                     cJSON *k = cJSON_GetObjectItem(fld, "key");
-                    cJSON *v = cJSON_GetObjectItem(fld, "value");
+                    cJSON *v = cJSON_GetObjectItem(fld, "value");                    
                     if (!k || !v || !cJSON_IsString(k)) continue;
+
+                    size_t prefix_len = strlen(prefix);
+
+                    // Ignore keys that match prefix_id, since they have already been written.
+                    if (strncasecmp(k->valuestring, prefix, prefix_len) == 0 && strcasecmp(k->valuestring + prefix_len, "_id") == 0) {
+                      continue;
+                    }
 
                     char val_str[256] = {0};
                     if (cJSON_IsString(v)) {
@@ -1086,6 +1151,61 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
 
                 f_item = cJSON_CreateObject();
                 cJSON_AddStringToObject(f_item, "key", "gpio_condition_met_delay");
+                cJSON_AddStringToObject(f_item, "type", "number");
+                cJSON_AddBoolToObject(f_item, "readonly", false);
+                cJSON_AddNumberToObject(f_item, "value", curr->delay_on);
+                cJSON_AddItemToArray(block_fields, f_item);
+                break;
+
+            case ACD_TYPE_SENSOR_COND:
+                cJSON_AddStringToObject(block, "driver_type", "sensor_condition");
+
+                f_item = cJSON_CreateObject();
+                cJSON_AddStringToObject(f_item, "key", "sensor_condition_id");
+                cJSON_AddBoolToObject(f_item, "readonly", true);
+                cJSON_AddBoolToObject(f_item, "advanced", true);
+                cJSON_AddStringToObject(f_item, "value", curr->ID);
+                cJSON_AddItemToArray(block_fields, f_item);
+                
+                f_item = cJSON_CreateObject();
+                cJSON_AddStringToObject(f_item, "key", "sensor_condition_source_id");
+                cJSON_AddStringToObject(f_item, "type", "string");
+                cJSON_AddBoolToObject(f_item, "readonly", false);
+                cJSON_AddStringToObject(f_item, "value", curr->data.sensor_cond.source_id);
+                cJSON_AddItemToArray(block_fields, f_item);
+
+                f_item = cJSON_CreateObject();
+                cJSON_AddStringToObject(f_item, "key", "sensor_condition_threshold");
+                cJSON_AddStringToObject(f_item, "type", "number");
+                cJSON_AddBoolToObject(f_item, "readonly", false);
+                cJSON_AddNumberToObject(f_item, "value", curr->data.sensor_cond.threshold);
+                cJSON_AddItemToArray(block_fields, f_item);
+
+                f_item = cJSON_CreateObject();
+                cJSON_AddStringToObject(f_item, "key", "sensor_condition_operator");
+                cJSON_AddStringToObject(f_item, "type", "select");
+                cJSON_AddBoolToObject(f_item, "readonly", false);
+                cJSON_AddStringToObject(f_item, "value", operator_to_str(curr->data.sensor_cond.op));
+                cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_OPERATOR));
+                cJSON_AddItemToArray(block_fields, f_item);
+
+                f_item = cJSON_CreateObject();
+                cJSON_AddStringToObject(f_item, "key", "sensor_condition_hysteresis");
+                cJSON_AddStringToObject(f_item, "type", "number");
+                cJSON_AddBoolToObject(f_item, "readonly", false);
+                cJSON_AddNumberToObject(f_item, "value", curr->data.sensor_cond.hysteresis);
+                cJSON_AddItemToArray(block_fields, f_item);
+
+                f_item = cJSON_CreateObject();
+                cJSON_AddStringToObject(f_item, "key", "sensor_condition_severity");
+                cJSON_AddStringToObject(f_item, "type", "select");
+                cJSON_AddBoolToObject(f_item, "readonly", false);
+                cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_SCOPE));
+                cJSON_AddStringToObject(f_item, "value", acd_scope_to_str(curr->scope));
+                cJSON_AddItemToArray(block_fields, f_item);
+
+                f_item = cJSON_CreateObject();
+                cJSON_AddStringToObject(f_item, "key", "sensor_condition_met_delay");
                 cJSON_AddStringToObject(f_item, "type", "number");
                 cJSON_AddBoolToObject(f_item, "readonly", false);
                 cJSON_AddNumberToObject(f_item, "value", curr->delay_on);
@@ -1658,7 +1778,7 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
                 cJSON_AddStringToObject(block, "driver_type", "mqtt_value_sensor");
 
                 f_item = cJSON_CreateObject();
-                cJSON_AddStringToObject(f_item, "key", "mqtt_value_id");
+                cJSON_AddStringToObject(f_item, "key", "mqtt_sensor_id");
                 cJSON_AddBoolToObject(f_item, "readonly", true);
                 cJSON_AddBoolToObject(f_item, "advanced", true);
                 cJSON_AddStringToObject(f_item, "value", curr->ID);
@@ -1776,6 +1896,53 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
 
     df_item = cJSON_CreateObject();
     cJSON_AddStringToObject(df_item, "key", "gpio_condition_met_delay");
+    cJSON_AddStringToObject(df_item, "type", "number");
+    cJSON_AddNumberToObject(df_item, "value", 0);
+    cJSON_AddItemToArray(df_arr, df_item);
+
+    // Define: Sensor Condition Template
+    drv = cJSON_CreateObject();
+    cJSON_AddNumberToObject(drv, "block_type_id", ACD_TYPE_SENSOR_COND);
+    cJSON_AddStringToObject(drv, "driver_type", "sensor_condition");
+    cJSON_AddStringToObject(drv, "default_label", "New sensor Condition");
+    df_arr = cJSON_AddArrayToObject(drv, "fields");
+
+    df_item = cJSON_CreateObject();
+    cJSON_AddStringToObject(df_item, "key", "sensor_condition_source_id");
+    cJSON_AddStringToObject(df_item, "type", "string");
+    cJSON_AddStringToObject(df_item, "value", "");
+    cJSON_AddItemToArray(df_arr, df_item);
+
+    df_item = cJSON_CreateObject();
+    cJSON_AddStringToObject(df_item, "key", "sensor_condition_threshold");
+    cJSON_AddStringToObject(df_item, "type", "number");
+    cJSON_AddNumberToObject(df_item, "value", 0.0f);
+    cJSON_AddItemToArray(df_arr, df_item);
+
+    df_item = cJSON_CreateObject();
+    cJSON_AddStringToObject(df_item, "key", "sensor_condition_operator");
+    cJSON_AddStringToObject(df_item, "type", "select");
+    cJSON_AddStringToObject(df_item, "value", "off");
+    cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_OPERATOR));
+    cJSON_AddItemToArray(df_arr, df_item);
+    cJSON_AddItemToArray(available_drivers, drv);
+
+    df_item = cJSON_CreateObject();
+    cJSON_AddStringToObject(df_item, "key", "sensor_condition_hysteresis");
+    cJSON_AddStringToObject(df_item, "type", "number");
+    cJSON_AddNumberToObject(df_item, "value", 0.5f);
+    cJSON_AddItemToArray(df_arr, df_item);
+
+    df_item = cJSON_CreateObject();
+    cJSON_AddStringToObject(df_item, "key", "sensor_condition_interlock_scope");
+    cJSON_AddStringToObject(df_item, "type", "select");
+    cJSON_AddBoolToObject(df_item, "readonly", false);
+    cJSON_AddStringToObject(df_item, "value", "Global");
+    cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_SCOPE));
+    cJSON_AddItemToArray(available_drivers, drv);
+
+    df_item = cJSON_CreateObject();
+    cJSON_AddStringToObject(df_item, "key", "sensor_condition_met_delay");
     cJSON_AddStringToObject(df_item, "type", "number");
     cJSON_AddNumberToObject(df_item, "value", 0);
     cJSON_AddItemToArray(df_arr, df_item);
@@ -2442,6 +2609,7 @@ void print_config (struct aquachemdata *acdata)
     switch (curr->type) {
       case ACD_TYPE_MQTT_COND:   type_str = "condition (MQTT)"; break;
       case ACD_TYPE_GPIO_COND:   type_str = "condition (GPIO)"; break;
+      case ACD_TYPE_SENSOR_COND: type_str = "condition (Sensor)"; break;
       case ACD_TYPE_EZO_TEMP:    type_str = "sensor (EZO Temp)"; break;
       case ACD_TYPE_EZO_PH:      type_str = "sensor (EZO pH)"; break;
       case ACD_TYPE_EZO_ORP:     type_str = "sensor (EZO ORP)"; break;
@@ -2492,6 +2660,12 @@ void print_config (struct aquachemdata *acdata)
         curr->type == ACD_TYPE_GPIO_OUTPUT || curr->type == ACD_TYPE_GPIO_INPUT) {
       LOG(LOG_INFO, "%-*s   -> pin = %d, mode = %s, required state = %s, scope = %s\n", MAX_PRINTLEN, "",
           curr->data.gpio.pin, gpio_active_to_str(curr->data.gpio.active), gpio_req_to_str(curr->data.gpio.required),
+          config_scope_detail_str(curr));
+    }
+
+    if (curr->type == ACD_TYPE_SENSOR_COND) {
+      LOG(LOG_INFO, "%-*s   -> sourceID = %s, operator = %s, threshold = %.2f, hysteresis = %.2f, scope = %s\n", MAX_PRINTLEN, "",
+          curr->data.sensor_cond.source_id, operator_to_str(curr->data.sensor_cond.op), curr->data.sensor_cond.threshold, curr->data.sensor_cond.threshold,
           config_scope_detail_str(curr));
     }
 
@@ -2607,6 +2781,14 @@ void validate_interlock(acd_key_t *key) {
 }
 
 
+acd_key_t *find_key_by_id(struct aquachemdata *a, const char *id)
+{
+  if (!id) return NULL;
+  for (acd_key_t *k = a->keys; k; k = k->next)
+    if (k->ID && strcmp(k->ID, id) == 0) return k;
+  return NULL;
+}
+
 void validate_config(struct aquachemdata *acdata) {
 
   // make sure a valid poll time. ie >= 1
@@ -2618,6 +2800,27 @@ void validate_config(struct aquachemdata *acdata) {
   for (acd_key_t *curr = acdata->keys->next; curr != NULL; curr = curr->next) {
     validate_interlock(curr);
     // any other checks need to happen in keys..........
+
+    if (curr->type == ACD_TYPE_SENSOR_COND) {
+      // Find the sensor ID, validate the scope to the source & assign it.
+      acd_key_t *src = find_key_by_id(acdata, curr->data.sensor_cond.source_id);
+
+      if (!src) {
+        // Do I disable it (not supported), default to on / off
+        LOG(LOG_ERR, "Can't find ID `%s` for condition `%s`", curr->data.sensor_cond.source_id, curr->label);
+        curr->met = false; // This will set the default state.
+        curr->data.sensor_cond.source_sensor = NULL;
+        continue;
+      }
+
+      if (src->scope == ACD_SCOPE_GLOBAL) {
+        LOG(LOG_ERR, "Sensor condition `%s` uses `%s` which has Global scope, this will cause deadlock!, changing to Local scope",  curr->label, curr->data.sensor_cond.source_id);
+        src->scope = ACD_SCOPE_LOCAL;
+      }
+
+      curr->data.sensor_cond.source_sensor = src;
+      LOG(LOG_DEBUG,"Assigned `%s` to condition `%s`",src->label, curr->label);
+    }
   } 
 }
 
@@ -2650,7 +2853,8 @@ typedef enum {
 const char *prefix_for_type(acd_type_t type) {
   switch (type) {
     case ACD_TYPE_MQTT_COND:
-    case ACD_TYPE_GPIO_COND:      return "CS";
+    case ACD_TYPE_GPIO_COND:
+    case ACD_TYPE_SENSOR_COND:    return "CS";
     case ACD_TYPE_EZO_PH:         return "PH";
     case ACD_TYPE_EZO_ORP:        return "ORP";
     case ACD_TYPE_EZO_EC:         return "EC";
@@ -2678,7 +2882,8 @@ const char *prefix_for_type(acd_type_t type) {
 static id_prefix_index_t prefix_index_for_type(acd_type_t type) {
   switch (type) {
     case ACD_TYPE_MQTT_COND:
-    case ACD_TYPE_GPIO_COND:      return ID_PREFIX_CS;
+    case ACD_TYPE_GPIO_COND:      
+    case ACD_TYPE_SENSOR_COND:    return ID_PREFIX_CS;
     case ACD_TYPE_EZO_PH:         return ID_PREFIX_PH;
     case ACD_TYPE_EZO_ORP:        return ID_PREFIX_ORP;
     case ACD_TYPE_EZO_EC:         return ID_PREFIX_EC;
@@ -2893,6 +3098,30 @@ void add_condition_gpio(const acd_staging_t *st) {
     new_node->delay_on = st->value; 
     
     append_to_key_list(new_node);
+}
+
+void add_condition_sensor(const acd_staging_t *st) {
+    if (st->operator == ACD_OP_NONE || st->operator == ACD_OP_INVALID) {
+        LOG(LOG_ERR, "%s: sensor_condition_operator missing or invalid, ignored\n", st->label);
+        return;
+    }
+    if (!st->char_value || !st->char_value[0]) {
+        LOG(LOG_ERR, "Condition %s: sensor_condition_source_id missing, ignored\n", st->label);
+        return;
+    }
+    acd_key_t *n = calloc(1, sizeof(acd_key_t));
+    if (!n) return;
+    n->type  = ACD_TYPE_SENSOR_COND;
+    n->label = generate_label(st->char_value, n->type, st->label);
+    n->ID    = st->ID ? strdup(st->ID) : NULL;
+    n->data.sensor_cond.source_id  = strdup(st->char_value);
+    n->data.sensor_cond.op         = st->operator;
+    n->data.sensor_cond.threshold  = st->value2;
+    n->data.sensor_cond.hysteresis = st->value3 > 0 ? st->value3 : 0;
+    n->scope    = st->scope;
+    n->delay_on = st->value;
+    n->data.sensor_cond.source_sensor = NULL;
+    append_to_key_list(n);
 }
 
 // Specialized function for Atlas Scientific EZO

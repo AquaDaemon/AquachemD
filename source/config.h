@@ -41,6 +41,7 @@ struct acdconfig
   char *mqtt_user;
   char *mqtt_passwd;
   bool mqtt_discovery_use_mac;
+  bool mqtt_post_conditions;
   
   char *gpio_chip;
 
@@ -49,14 +50,15 @@ struct acdconfig
   bool mqtt_repost_sensors;
   bool mqtt_strict_avail;
   
-  int ph_reading_temp_max;
-  int ph_reading_temp_min;
+  bool temp_comp_ph;
+  bool temp_comp_ec;
+  int temp_comp_reading_min;
+  int temp_comp_reading_max;
 
   int sensor_poll_time;
 
-  bool post_condition;
-  bool temp_compensated_ph;
-  bool temp_compensated_ec;
+  //bool post_condition;
+
   bool log_zerorun_pump_events;
 
   uint32_t ph_default_dose_time;

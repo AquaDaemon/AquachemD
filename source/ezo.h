@@ -30,6 +30,11 @@
 #define EZO_NO_DATA     255
 #define EZO_ERROR       -1    // Hardware, communication, or bus-level failure
 
+// Command retries and wait between them.
+// Only used for ezo_read_retry(), is after the first call returns EZO_PENDING
+#define EZO_RETRIES        5
+#define EZO_RETRY_WAIT_MS  100
+
 // Command wait times in milliseconds
 #define EZO_WAIT_READ          900
 #define EZO_WAIT_CALIBRATE    1600
