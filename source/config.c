@@ -1390,7 +1390,7 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
                 cJSON_AddStringToObject(block, "driver_type", "d1w_sensor");
                 
                 f_item = cJSON_CreateObject();
-                cJSON_AddStringToObject(f_item, "key", "d1w_sensor_id");
+                cJSON_AddStringToObject(f_item, "key", "temp_sensor_id");
                 cJSON_AddBoolToObject(f_item, "readonly", true);
                 cJSON_AddBoolToObject(f_item, "advanced", true);
                 cJSON_AddStringToObject(f_item, "value", curr->ID);
