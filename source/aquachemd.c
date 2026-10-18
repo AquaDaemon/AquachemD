@@ -72,6 +72,9 @@ Usage:
 //pthread_t _daemon_thread_id;
 //acd_runstate_t _runstate;
 
+// Pull from state_manager.c
+void check_master(struct aquachemdata *acdata);
+
 static acd_thread_t _thread_control = {
     .parent_id = 0,
     .id = 0,
@@ -656,7 +659,7 @@ reload_configuration:
     //acddata.keys->state = ACD_LED_ON;
   }
 
-  //check_master(&acddata);
+  check_master(&acddata);
 
   start_gpio_monitor(&acddata);
 
@@ -676,8 +679,9 @@ reload_configuration:
   while (atomic_load_explicit(&_thread_control.state, memory_order_relaxed) == ACD_KEEPRUNNING)
   {
     //acd_scope_t sensors_read_scope = ACD_SCOPE_GLOBAL;
-    float temp_for_compensated_readings = UNKNOWN;
-    char *master_temp_label = NULL;
+    //float temp_for_compensated_readings = UNKNOWN;
+    acd_key_t *comp_reading_key = NULL;
+    //char *_acdconfig_.temp_comp_id = NULL;
 
     int gpio_state = GPIO_ERROR;
 
@@ -740,21 +744,15 @@ reload_configuration:
       }
 
       switch (key->type) {
-        case ACD_TYPE_MQTT_TEMP:          
-          if (key->index == MASTER_ID) { // If this is the master temp sensor, also update the temp reading for pH compensation
-            temp_for_compensated_readings = key->value;
-            master_temp_label = key->label;
-          }
+        case ACD_TYPE_MQTT_TEMP:
+          if (isMASKSET(key->flags, TEMP_FOR_COMP_READING)) {comp_reading_key = key;} 
           LOG(LOG_DEBUG, "MQTT Sensor '%s' current value: %.2f\n", key->label, key->value);
           break;
         case ACD_TYPE_D1W_TEMP: {
           w1_reading_t temp_reading = w1_read(&key->data.w1);
           if (temp_reading.status == W1_SUCCESS) {
             LOG(reading_log_level,"Temp %s : %.2f°C\n", key->label, temp_reading.value);
-            if (key->index == MASTER_ID) { // If this is the master temp sensor, also update the temp reading for pH compensation
-              temp_for_compensated_readings = temp_reading.value; 
-              master_temp_label = key->label;
-            }
+            if (isMASKSET(key->flags, TEMP_FOR_COMP_READING)) {comp_reading_key = key;} 
             ASSIGN_IF_CHANGED(key->value, temp_reading.value, acddata.is_dirty, key->is_dirty);
             set_key_state(&acddata, key, ACD_LED_ON);
             key->err_cnt=0;
@@ -769,10 +767,7 @@ reload_configuration:
           rtd_reading_t temp_reading = rtd_get_reading(&key->data.ezo);
           if (temp_reading.status == EZO_SUCCESS) {
             LOG(reading_log_level,"Temp %s : %.2f°C\n", key->label, temp_reading.value);
-            if (key->index == MASTER_ID) { // If this is the master temp sensor, also update the temp reading for pH compensation
-              temp_for_compensated_readings = temp_reading.value;
-              master_temp_label = key->label;
-            }
+            if (isMASKSET(key->flags, TEMP_FOR_COMP_READING)) {comp_reading_key = key;} 
             ASSIGN_IF_CHANGED(key->value, temp_reading.value, acddata.is_dirty, key->is_dirty);
             set_key_state(&acddata, key, ACD_LED_ON);
             key->err_cnt=0;
@@ -788,17 +783,17 @@ reload_configuration:
           ph_reading_t ph_reading;
           if (_acdconfig_.temp_comp_ph == false) {
             ph_reading = ph_get_reading(&key->data.ezo);
-          } else if ( temp_for_compensated_readings != UNKNOWN) {
-            if (temp_for_compensated_readings > _acdconfig_.temp_comp_reading_max || temp_for_compensated_readings < _acdconfig_.temp_comp_reading_min ) {
+          } else if ( comp_reading_key != NULL) {
+            if (comp_reading_key->value > _acdconfig_.temp_comp_reading_max || comp_reading_key->value < _acdconfig_.temp_comp_reading_min ) {
               char buf[128];
-              sprintf(buf, "Water temperature %.2f°C too %s for Ph reading", temp_for_compensated_readings, temp_for_compensated_readings < _acdconfig_.temp_comp_reading_min?"cold":"hot");
+              sprintf(buf, "Water temperature %.2f°C too %s for Ph reading", comp_reading_key->value, comp_reading_key->value < _acdconfig_.temp_comp_reading_min?"cold":"hot");
               LOG(LOG_WARNING, "%s\n", buf);
               set_key_state(&acddata, key, ACD_LED_OFF);
               update_display_message(&acddata, ACD_MSG_CONDITION_FAILED, buf);
               break;
             }
-            LOG(reading_log_level, "Using %s, %.2f for pH compensated reading", master_temp_label?master_temp_label:"", temp_for_compensated_readings);
-            ph_reading = ph_get_reading_compensated(&key->data.ezo, temp_for_compensated_readings);
+            LOG(reading_log_level, "Using %s, %.2f for pH compensated reading", comp_reading_key->label, comp_reading_key->value);
+            ph_reading = ph_get_reading_compensated(&key->data.ezo, comp_reading_key->value);
           } else {
             LOG(LOG_WARNING, "EZO pH Sensor '%s' skipped compensation because temp is unknown\n", key->label);
             set_key_state(&acddata, key, ACD_LED_OFF);
@@ -851,17 +846,17 @@ reload_configuration:
 
           if (_acdconfig_.temp_comp_ec == false) {
             ec_reading = ec_get_reading(&key->data.ezo);
-          } else if ( temp_for_compensated_readings != UNKNOWN) {
-            if (temp_for_compensated_readings > _acdconfig_.temp_comp_reading_max || temp_for_compensated_readings < _acdconfig_.temp_comp_reading_min ) {
+          } else if ( comp_reading_key != NULL) {
+            if (comp_reading_key->value > _acdconfig_.temp_comp_reading_max || comp_reading_key->value < _acdconfig_.temp_comp_reading_min ) {
               char buf[128];
-              sprintf(buf, "Water temperature %.2f°C too %s for EC reading", temp_for_compensated_readings, temp_for_compensated_readings < _acdconfig_.temp_comp_reading_min?"cold":"hot");
+              sprintf(buf, "Water temperature %.2f°C too %s for EC reading", comp_reading_key->value, comp_reading_key->value < _acdconfig_.temp_comp_reading_min?"cold":"hot");
               LOG(LOG_WARNING, "%s\n", buf);
               set_key_state(&acddata, key, ACD_LED_OFF);
               update_display_message(&acddata, ACD_MSG_CONDITION_FAILED, buf);
               break;
             }
-            LOG(reading_log_level, "Using %s, %.2f for EC compensated reading", master_temp_label?master_temp_label:"", temp_for_compensated_readings);
-            ec_reading = ec_get_reading_compensated(&key->data.ezo, temp_for_compensated_readings);
+            LOG(reading_log_level, "Using %s, %.2f for EC compensated reading", comp_reading_key->label, comp_reading_key->value);
+            ec_reading = ec_get_reading_compensated(&key->data.ezo, comp_reading_key->value);
           } else {
             LOG(LOG_WARNING, "No temperature for compensated EZO EC Sensor '%s', not reading\n", key->label);
             break;   

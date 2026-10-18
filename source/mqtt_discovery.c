@@ -53,7 +53,7 @@ static const char *HASS_SENSOR_TEMPLATE =
         "\"name\":\"%s\","
     // "\"state_topic\":\"%s/%s/" MQTT_TL_STATE "\","
         "\"state_topic\":\"%s/%s\","
-        "\"value_template\":\"{{ value_json }}\","
+        "\"value_template\":\"{{ value_json | float }}\","
         "\"icon\":\"%s\""
         "%s" // Extra JSON (unit, device_class, state_class) injected here
     "}";
@@ -212,7 +212,7 @@ void publish_mqtt_discovery(struct aquachemdata *acdata, struct mg_connection *n
                 state_mapper = "{% set mapper = {'0':'off','1':'on','2':'enabled','3':'off'} %}{{ mapper[value] if value in mapper else 'off' }}";
                 break;
           
-            case ACD_TYPE_MQTT_TEMP:
+            case ACD_TYPE_MQTT_TEMP: // Will fall through to ACD_TYPE_EZO_TEMP when set to yes
                 if (!_acdconfig_.mqtt_repost_sensors) {
                     should_publish = false;
                     break;
@@ -242,7 +242,7 @@ void publish_mqtt_discovery(struct aquachemdata *acdata, struct mg_connection *n
                 if (curr->uom && curr->uom != UOM_NONE) {
                   snprintf(extra_json, sizeof(extra_json), 
                     ",\"unit_of_measurement\":\"%s\",\"device_class\":\"pressure\",\"state_class\":\"measurement\"",
-                    uom_to_str(curr->uom));
+                    uom_to_HA_str(curr->uom));
                 } else {
                   snprintf(extra_json, sizeof(extra_json), 
                     ",\"device_class\":\"pressure\",\"state_class\":\"measurement\"");
@@ -250,20 +250,23 @@ void publish_mqtt_discovery(struct aquachemdata *acdata, struct mg_connection *n
                 icon = "mdi:gauge";
                 break;
 
+            case ACD_TYPE_MQTT_VALUE: // Will fall through to ACD_TYPE_SYSFS_VALUE when set to yes
+                if (!_acdconfig_.mqtt_repost_sensors) {
+                    should_publish = false;
+                    break;
+                }
             case ACD_TYPE_SYSFS_VALUE:
                 if (IS_UOM_TEMPERATURE(curr->uom)) {
                   snprintf(extra_json, sizeof(extra_json), 
                     ",\"unit_of_measurement\":\"%s\",\"device_class\":\"temperature\",\"state_class\":\"measurement\"",
-                    uom_to_str(curr->uom));
+                    uom_to_HA_str(curr->uom));
                     icon = "mdi:thermometer";
                 } else {
                    snprintf(extra_json, sizeof(extra_json), 
                     ",\"unit_of_measurement\":\"%s\",\"state_class\":\"measurement\"",
-                    uom_to_str(curr->uom));
+                    uom_to_HA_str(curr->uom));
                     icon = "mdi:chemical-weapon";
                 }
-
-                icon = "mdi:thermometer";
                 break;
 
             case ACD_TYPE_MQTT_COND: // Will fall through to ACD_TYPE_GPIO_COND when set to yes
@@ -297,12 +300,12 @@ void publish_mqtt_discovery(struct aquachemdata *acdata, struct mg_connection *n
             case ACD_TYPE_EZO_EC:
               if (curr->uom == UOM_MICROSIEMENS_CM) {
                 snprintf(extra_json, sizeof(extra_json), ",\"unit_of_measurement\":\"%s\",\"device_class\":\"conductivity\",\"state_class\":\"measurement\"",
-                         uom_to_str(curr->uom));
+                         uom_to_HA_str(curr->uom));
                 icon = "mdi:flash-outline";
               } else {
                 snprintf(extra_json, sizeof(extra_json),
                         ",\"unit_of_measurement\":\"%s\",\"state_class\":\"measurement\"",
-                        uom_to_str(curr->uom));
+                        uom_to_HA_str(curr->uom));
                 icon = (curr->uom == UOM_PPM) ? "mdi:water-opacity" :(curr->uom == UOM_PSU) ? "mdi:waves" : "mdi:scale-balance";   // SG
               }
               break;
@@ -310,12 +313,12 @@ void publish_mqtt_discovery(struct aquachemdata *acdata, struct mg_connection *n
             case ACD_TYPE_GPIO_PULSE:
               if (curr->uom == UOM_LITERS_PER_MIN || curr->uom == UOM_GALLONS_PER_MIN) {
                 snprintf(extra_json, sizeof(extra_json),
-                         ",\"unit_of_measurement\":\"%s\",\"device_class\":\"volume_flow_rate\",\"state_class\":\"measurement\"",
-                         uom_to_str(curr->uom));
+                         ",\"unit_of_measurement\":\"%s\",\"device_class\":\"volume_flow_rate\",\"state_class\":\"measurement\",\"suggested_display_precision\": 2",
+                         uom_to_HA_str(curr->uom));
               } else {
                 snprintf(extra_json, sizeof(extra_json),
                          ",\"unit_of_measurement\":\"%s\",\"state_class\":\"measurement\"",
-                uom_to_str(curr->uom));
+                uom_to_HA_str(curr->uom));
               }
               icon = "mdi:pipe";
               break;
@@ -330,7 +333,6 @@ void publish_mqtt_discovery(struct aquachemdata *acdata, struct mg_connection *n
 
 
             case ACD_TYPE_NONE:
-            case ACD_TYPE_MQTT_VALUE:
               should_publish = false;
               break;
         }
@@ -425,7 +427,7 @@ void publish_mqtt_discovery(struct aquachemdata *acdata, struct mg_connection *n
                          0.0,
                          curr->data.tank.total_volume,
                          0.1,
-                         uom_to_str(curr->data.tank.uom),
+                         uom_to_HA_str(curr->data.tank.uom),
                         "mdi:cup-water");
  
                 send_mqtt(nc, topic, final_msg);
@@ -531,14 +533,14 @@ void publish_mqtt_discovery_device(struct aquachemdata *acdata, struct mg_connec
         {
             snprintf(extra_json, sizeof(extra_json),
                      ",\"unit_of_measurement\":\"%s\",\"device_class\":\"temperature\",\"state_class\":\"measurement\"",
-                     uom_to_str(device->uom));
+                     uom_to_HA_str(device->uom));
             icon = "mdi:thermometer";
         }
         else
         {
             snprintf(extra_json, sizeof(extra_json),
                      ",\"unit_of_measurement\":\"%s\",\"state_class\":\"measurement\"",
-                     uom_to_str(device->uom));
+                     uom_to_HA_str(device->uom));
             icon = "mdi:chemical-weapon";
         }
 

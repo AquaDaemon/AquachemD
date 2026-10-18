@@ -49,7 +49,7 @@ void broadcast_aquachemdstate(struct mg_connection *nc, bool force_all);
 void start_mqtt(struct mg_mgr *mgr);
 static void ws_send(struct mg_connection *nc, const char *msg);
 bool broadcast_systemd_logmessages(bool acdMgrActive);
-
+bool write_systemd_logmessages_2file(char *fname, int lines);
 
 #ifdef USE_SYSTEMD
   #include <systemd/sd-journal.h>
@@ -396,7 +396,7 @@ void serve_file(struct mg_connection *nc, struct mg_http_message *http_msg)
   }
 }
 
-typedef enum {uActioned, uBad, uDevices, uHomebridgeDevices, uConfig, uSaveConfig, uSaveWebConfig, uSaveSchedules,  uSchedules, uACDmanager, uDoseStats, uCalibrate, uInstantReading} uriAtype;
+typedef enum {uActioned, uBad, uDevices, uHomebridgeDevices, uConfig, uSaveConfig, uSaveWebConfig, uSaveSchedules,  uSchedules, uACDmanager, uDoseStats, uCalibrate, uInstantReading, uConfigDownload, uLogDownload} uriAtype;
 
 #define NO_DEVICE         "No matching Device found"
 #define INVALID_VALUE     "Invalid value"
@@ -440,12 +440,16 @@ uriAtype action_URI(const char *URI, int uri_length, float value, bool convertTe
     return uSaveSchedules;
   } else if (strncmp(ri1, "schedules", 9) == 0) {
     return uSchedules;
-  } else if (strncmp(ri1, "config/set", 10) == 0) {
-    return uSaveConfig;
   } else if (strncmp(ri1, "webconfig/set", 13) == 0) {
     return uSaveWebConfig;
+  } else if (strncmp(ri1, "config/download", 15) == 0) {
+    return uConfigDownload;
+  } else if (strncmp(ri1, "config/set", 10) == 0) {
+    return uSaveConfig;
   } else if (strncmp(ri1, "config", 6) == 0) {
     return uConfig;
+  } else if (strncmp(ri1, "logfile/download", 16) == 0) {
+    return uLogDownload;
   } else if (strncmp(ri1, "acdmanager", 10) == 0 || strncmp(ri1, "manager", 7) == 0/*&& from == NET_WS*/) { // Only valid from websocket.
     return uACDmanager;
   } else if (strncmp(ri1, "setloglevel", 11) == 0 /*&& from == NET_WS*/) { // Only valid from websocket.
@@ -632,6 +636,25 @@ void action_web_request(struct mg_connection *nc, struct mg_http_message *http_m
         build_acdmanager_json(_aquachemd_data, message, sizeof(message));
         mg_http_reply(nc, 200, CONTENT_JSON, message);
         break;
+      case uConfigDownload:
+        LOG(LOG_DEBUG, "Downloading config\n");
+        mg_http_serve_file(nc, http_msg, _acdconfig_.config_file, &_http_server_opts_nocache);
+        break;
+      case uLogDownload:
+        // If lines was passed in post use it, if not see if it's next path in URI is a number
+        if (value == 0.0) {
+          char *pt = strrchr(buf, '/');
+          value = atoi(pt + 1);
+        }
+        if (value <= 0.0) {value=100.0;} // Default to 100 lines.
+        LOG(LOG_DEBUG, "Downloading log of max %d lines\n", (int)value );
+        if (write_systemd_logmessages_2file("/dev/shm/aqualinkd.log", (int)value))
+        {
+          mg_http_serve_file(nc, http_msg, "/dev/shm/aqualinkd.log", &_http_server_opts_nocache);
+          remove("/dev/shm/aqualinkd.log");
+        }
+        break;
+
       default:
         mg_http_reply(nc, 400, CONTENT_TEXT, GET_RTN_UNKNOWN);
         break;
@@ -1139,7 +1162,7 @@ void mqtt_broadcast_aquachemdstate(struct mg_connection *nc, bool force_all)
     
     if (!curr->is_dirty && !force_all) {continue;}
 
-    if (IS_CONDITION(curr->type) && _acdconfig_.mqtt_post_conditions) {
+    if (IS_CONDITION(curr->type) /*&& _acdconfig_.mqtt_post_conditions*/) {
       send_mqtt_acd_state_msg(nc, curr->ID, curr->met?ACD_LED_ON:ACD_LED_OFF);
     } else if (IS_OUTPUT(curr->type)) {
       // For homekit, we need to set the timer information before the state information.
@@ -1835,6 +1858,72 @@ bool broadcast_systemd_logmessages(bool acdMgrActive)
 
   return true;
 }
+
+
+
+
+#define USEC_PER_SEC	1000000L
+
+bool write_systemd_logmessages_2file(char *fname, int lines)
+{
+  FILE *fp = NULL;
+  sd_journal *journal;
+  const void *log;
+  size_t len;
+  const void *pri;
+  size_t plen;
+  char tsbuffer[20];
+  uint64_t realtime;
+  struct tm tm;
+  time_t sec;
+
+
+  fp = fopen (fname, "w");
+  if (fp == NULL) {
+    LOG(LOG_WARNING, "Failed to open tmp log file '%s'\n",fname);
+    return false;
+  }
+   if ( (journal = open_journal()) == NULL) {
+    fclose (fp);
+    return false;
+  }
+  if (sd_journal_seek_tail(journal) < 0)
+  {
+    LOG(LOG_WARNING, "Failed to seek to journal end");
+    fclose (fp);
+    sd_journal_close(journal);
+    return false;
+  }
+  if (sd_journal_previous_skip(journal, lines) < 0)
+  {
+    LOG(LOG_WARNING, "Failed to seek to journal start");
+    fclose (fp);
+    sd_journal_close(journal);
+    return false;
+  }
+
+  while ( sd_journal_next(journal) > 0) // need to capture return of this
+  {
+    if (sd_journal_get_data(journal, "MESSAGE", &log, &len) < 0) {
+        LOG(LOG_WARNING, "Failed to get journal message");
+    } else if (sd_journal_get_data(journal, "PRIORITY", &pri, &plen) < 0) {
+        LOG(LOG_WARNING, "Failed to get journal message priority");
+    } else if (sd_journal_get_realtime_usec(journal, &realtime) < 0) {
+        LOG(LOG_WARNING, "Failed to get journal message timestamp");
+    } else {
+      sec = (time_t)(realtime/USEC_PER_SEC);
+      localtime_r(&sec, &tm);
+      strftime(tsbuffer, sizeof(tsbuffer), "%b %d %T", &tm); // need to capture return of this
+      fprintf(fp, "%-15s %-7s %.*s\n",tsbuffer,log_priority_to_str(atoi((const char *)pri+9)), (int)len-8,(const char *)log+8);
+    }
+  }
+
+  sd_journal_close(journal);
+  fclose (fp);
+
+  return true;
+}
+
 
 /*
 bool broadcast_systemd_logmessages(bool acdMgrActive)

@@ -41,17 +41,17 @@ struct acdconfig
   char *mqtt_user;
   char *mqtt_passwd;
   bool mqtt_discovery_use_mac;
-  bool mqtt_post_conditions;
-  
-  char *gpio_chip;
-
-  bool convert_mqtt_temp;
+  //bool mqtt_post_conditions;
+  //bool convert_mqtt_temp;
   bool mqtt_timed_update;
   bool mqtt_repost_sensors;
   bool mqtt_strict_avail;
+
+  char *gpio_chip;
   
   bool temp_comp_ph;
   bool temp_comp_ec;
+  char *temp_comp_id;
   int temp_comp_reading_min;
   int temp_comp_reading_max;
 
@@ -70,8 +70,8 @@ struct acdconfig
 
   uint32_t switch_max_runtime; // Default max runtime for switches etc
 
-  bool ph_average_dose_calc;
-  bool orp_average_dose_calc;
+  //bool ph_average_dose_calc;
+  //bool orp_average_dose_calc;
 
   runtime_range_t ph_steps[MAX_DOSING_RANGES];
   uint8_t ph_step_count;

@@ -2791,6 +2791,7 @@ acd_key_t *find_key_by_id(struct aquachemdata *a, const char *id)
 
 void validate_config(struct aquachemdata *acdata) {
 
+  bool found_temp_comp = false;
   // make sure a valid poll time. ie >= 1
   _acdconfig_.sensor_poll_time = (_acdconfig_.sensor_poll_time < 1) ? 1 : _acdconfig_.sensor_poll_time;
 
@@ -2800,6 +2801,15 @@ void validate_config(struct aquachemdata *acdata) {
   for (acd_key_t *curr = acdata->keys->next; curr != NULL; curr = curr->next) {
     validate_interlock(curr);
     // any other checks need to happen in keys..........
+
+    if (_acdconfig_.temp_comp_id && strcasecmp(_acdconfig_.temp_comp_id, curr->ID) == 0) {
+      if (IS_TEMPERATURE(curr->type)) {
+        setMASK(curr->flags, TEMP_FOR_COMP_READING);
+        found_temp_comp = true;
+      } else {
+        LOG(LOG_ERR, "Sensor '%s' is not a temperature, can use't use for compensated readings");
+      }
+    }
 
     if (curr->type == ACD_TYPE_SENSOR_COND) {
       // Find the sensor ID, validate the scope to the source & assign it.
@@ -2821,7 +2831,11 @@ void validate_config(struct aquachemdata *acdata) {
       curr->data.sensor_cond.source_sensor = src;
       LOG(LOG_DEBUG,"Assigned `%s` to condition `%s`",src->label, curr->label);
     }
-  } 
+  }
+
+  if (!found_temp_comp && (_acdconfig_.temp_comp_ec || _acdconfig_.temp_comp_ph)) {
+    LOG(LOG_ERR, "Did not find a valid temperature sensor for compensated readings in config!");
+  }
 }
 
 

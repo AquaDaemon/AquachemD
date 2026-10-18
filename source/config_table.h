@@ -37,9 +37,12 @@ CFG_ENTRY( "mqtt_aquachemd_topic",   mqtt_aquachemd_topic,   "aquachemd",       
 CFG_ENTRY( "mqtt_aqualinkd_topic",   mqtt_aqualinkd_topic,   "aqualinkd",          CFG_STRING,  CFG_ADVANCED,                  0,                NULL )
 CFG_ENTRY( "mqtt_discovery_topic",   mqtt_discovery_topic,   "homeassistant",      CFG_STRING,  CFG_ADVANCED,                  0,                NULL )
 CFG_ENTRY( "mqtt_discovery_use_mac", mqtt_discovery_use_mac, true,                 CFG_BOOL,    CFG_ADVANCED,                  0,                CFG_O_BOOL )
+CFG_ENTRY( "mqtt_discovery_strict_availability",mqtt_strict_avail,   false,        CFG_BOOL,    CFG_ADVANCED,                  0,                CFG_O_BOOL )
+CFG_ENTRY( "mqtt_discovery_repost_sensors",     mqtt_repost_sensors, false,        CFG_BOOL,    CFG_ADVANCED,                  0,                CFG_O_BOOL )
 CFG_ENTRY( "mqtt_timed_update",      mqtt_timed_update,      true,                 CFG_BOOL,    CFG_ADVANCED,                  0,                CFG_O_BOOL )
-CFG_ENTRY( "mqtt_post_conditions",   mqtt_post_conditions,   true,                 CFG_BOOL,    CFG_ADVANCED,                  0,                CFG_O_BOOL )
 
+//CFG_ENTRY( "mqtt_post_conditions",   mqtt_post_conditions,   true,                 CFG_BOOL,    CFG_ADVANCED,                  0,                CFG_O_BOOL )
+//CFG_ENTRY( "mqtt_convert_to_degF",   convert_mqtt_temp,      false,                CFG_BOOL,    0,                                  0,                CFG_O_BOOL )
 //CFG_ENTRY( "mqtt_repost_sensors",    mqtt_repost_sensors,    false,                CFG_BOOL,    CFG_ADVANCED,                                  0,                CFG_O_BOOL )
 //CFG_ENTRY( "mqtt_discovery_strict_availability",mqtt_strict_avail,false,           CFG_BOOL,    CFG_ADVANCED,                                  0,               CFG_O_BOOL )
 
@@ -61,22 +64,21 @@ CFG_ENTRY( "gpio_chip",              gpio_chip,              "/dev/gpiochip0",  
 
 /* --- POLLING & CONVERSION --- */
 CFG_ENTRY( "sensor_poll_time",       sensor_poll_time,       60,                   CFG_INT,     0,                                  0,                NULL )
-CFG_ENTRY( "mqtt_convert_to_degF",   convert_mqtt_temp,      false,                CFG_BOOL,    0,                                  0,                CFG_O_BOOL )
 
 /* --- DOSING RANGES (Restored CFG_CUSTOM) --- */
 CFG_ENTRY( "ph_dose_range",          ph_steps,               NULL,                 CFG_CUSTOM,  CFG_MULTIPLE,                       0,                NULL )
 CFG_ENTRY( "ph_default_dose_time",   ph_default_dose_time,   20,                   CFG_INT,     0,                                  0,                NULL )
-CFG_ENTRY( "ph_max_dose_time",       ph_max_dose_time,      60,                   CFG_INT,     0,                                  0,                NULL )
-CFG_ENTRY( "ph_average_dose_calc",   ph_average_dose_calc,   false,                CFG_BOOL,    0,                                  0,                CFG_O_BOOL )
+CFG_ENTRY( "ph_max_dose_time",       ph_max_dose_time,      60,                    CFG_INT,     0,                                  0,                NULL )
+//CFG_ENTRY( "ph_average_dose_calc",   ph_average_dose_calc,   false,                CFG_BOOL,    0,                                  0,                CFG_O_BOOL )
 
 
 CFG_ENTRY( "orp_dose_range",         orp_steps,              NULL,                 CFG_CUSTOM,  CFG_MULTIPLE,                       0,                NULL )
 CFG_ENTRY( "orp_default_dose_time",  orp_default_dose_time,  60,                   CFG_INT,     0,                                  0,                NULL )
-CFG_ENTRY( "orp_max_dose_time",      orp_max_dose_time,     300,                  CFG_INT,     0,                                  0,                NULL )
-CFG_ENTRY( "orp_average_dose_calc",  orp_average_dose_calc,  false,                CFG_BOOL,    0,                                  0,                CFG_O_BOOL )
+CFG_ENTRY( "orp_max_dose_time",      orp_max_dose_time,     300,                   CFG_INT,     0,                                  0,                NULL )
+//CFG_ENTRY( "orp_average_dose_calc",  orp_average_dose_calc,  false,                CFG_BOOL,    0,                                  0,                CFG_O_BOOL )
 
 CFG_ENTRY( "h2o_default_dose_time",  h2o_default_dose_time,  300,                  CFG_INT,     0,                                  0,                NULL )
-CFG_ENTRY( "h2o_max_dose_time",      h2o_max_dose_time,     600,                  CFG_INT,     0,                                  0,                NULL )
+CFG_ENTRY( "h2o_max_dose_time",      h2o_max_dose_time,     600,                   CFG_INT,     0,                                  0,                NULL )
 
 
 CFG_ENTRY( "switch_max_runtime",     switch_max_runtime,    7200,                  CFG_INT,     0,                                  0,                NULL )
@@ -87,11 +89,12 @@ CFG_ENTRY( "switch_max_runtime",     switch_max_runtime,    7200,               
 CFG_ENTRY( "cert_dir",               cert_dir,               NULL,                 CFG_STRING,  CFG_GRP_ADVANCED,                   0,                NULL )
 #endif
 
-CFG_ENTRY( "use_temp_compensated_ph",    temp_comp_ph,       true,             CFG_BOOL,    0,                                  0,                CFG_O_BOOL )
-CFG_ENTRY( "use_temp_compensated_ec",    temp_comp_ec,       true,             CFG_BOOL,    0,                                  0,                CFG_O_BOOL )
+CFG_ENTRY( "use_temp_compensated_ph",    temp_comp_ph,       true,                 CFG_BOOL,    0,                                  0,                CFG_O_BOOL )
+CFG_ENTRY( "use_temp_compensated_ec",    temp_comp_ec,       true,                 CFG_BOOL,    0,                                  0,                CFG_O_BOOL )
 
-CFG_ENTRY( "temp_compensated_reading_min", temp_comp_reading_min,    1,            CFG_INT,     0,                                  0,                NULL )
-CFG_ENTRY( "temp_compensated_reading_max", temp_comp_reading_max,    60,           CFG_INT,     0,                                  0,                NULL )
+CFG_ENTRY( "temp_compensated_id",          temp_comp_id,     "TEMP_1",             CFG_STRING,  0,                                  0,                NULL )
+CFG_ENTRY( "temp_compensated_reading_min", temp_comp_reading_min,  1,              CFG_INT,     0,                                  0,                NULL )
+CFG_ENTRY( "temp_compensated_reading_max", temp_comp_reading_max, 60,              CFG_INT,     0,                                  0,                NULL )
 
 CFG_ENTRY( "log_zerorun_pump_events",log_zerorun_pump_events,false,                CFG_BOOL,    0,                                  0,                CFG_O_BOOL )
 
@@ -102,8 +105,7 @@ CFG_ENTRY( "mqtt_condition_label",         keys,             NULL,              
 CFG_ENTRY( "mqtt_condition_ID",            keys,             NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "mqtt_condition_topic",         keys,             NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "mqtt_condition_value",         keys,             NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
-//CFG_ENTRY( "mqtt_condition_scope_global",  keys,             NULL,                 CFG_BOOL,    CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
-CFG_ENTRY( "mqtt_condition_severity",keys,             NULL,                CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "mqtt_condition_severity",      keys,             NULL,                CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "mqtt_condition_met_delay",     keys,             NULL,                 CFG_INT,     CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 
 CFG_ENTRY( "gpio_condition_label",         keys,             NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
@@ -111,8 +113,7 @@ CFG_ENTRY( "gpio_condition_ID",            keys,             NULL,              
 CFG_ENTRY( "gpio_condition_pin",           keys,             NULL,                 CFG_INT,     CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "gpio_condition_pin_mode",      keys,             NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "gpio_condition_required_state",keys,             NULL,                 CFG_BOOL,    CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
-//CFG_ENTRY( "gpio_condition_scope_global",  keys,             NULL,                 CFG_BOOL,    CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
-CFG_ENTRY( "gpio_condition_severity",         keys,             NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "gpio_condition_severity",      keys,             NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "gpio_condition_met_delay",     keys,             NULL,                 CFG_INT,     CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 // sensor_condition_operator
 
@@ -251,7 +252,7 @@ CFG_ENTRY( "sysfs_sensor_uom",        keys,                   NULL,             
 
 
 /* --- JSON Metadata Definitions --- */
-#define CFG_O_log_level "[\"DEBUG\",\"INFO\",\"NOTICE\",\"WARNING\",\"ERROR\"]"
+#define CFG_O_log_level "[\"Debug\",\"Info\",\"Notice\",\"Warning\",\"Error\"]"
 #define CFG_O_BOOL "[\"Yes\",\"No\"]"
 #define CFG_O_ONOFF "[\"on\",\"off\"]"
 #define CFG_O_ACTIVE "[\"Active High\",\"Active Low\"]"

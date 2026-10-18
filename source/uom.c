@@ -160,6 +160,20 @@ const char* uom_to_fullstr(acd_uom_t uom) {
     }
 }
 
+// Specific UOM for HA https://contributors.home-assistant.io/core/entities/sensor/
+
+const char* uom_to_HA_str(acd_uom_t uom) {
+  switch (uom) {
+
+    case UOM_GALLONS_PER_MIN: return "gal/min";
+    case UOM_LITERS_PER_MIN:  return "L/min";
+    
+    default:
+      return uom_to_str(uom); // Default to standard.
+  }
+}
+
+
 const char* uom_to_display_str(acd_uom_t uom) {
   if (uom == UOM_PH) {
     return UOM_NONE;

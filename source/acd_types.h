@@ -117,6 +117,7 @@ typedef enum {
 // REturns true for any pump (GPIO or EZO)
 #define IS_PUMP(t)      ((t) >= ACD_PMP_FIRST && (t) <= ACD_PMP_LAST)
 
+#define IS_TEMPERATURE(t) ((t) == ACD_TYPE_EZO_TEMP || (t) == ACD_TYPE_MQTT_TEMP || (t) == ACD_TYPE_D1W_TEMP || (t) == ACD_TYPE_I2C_TEMP)
 
 // acd_types.h
 typedef enum {
@@ -512,6 +513,8 @@ typedef struct runtime_range_t{
 
 #define ACD_FLAG_VIRTUAL       (1 << 9)
 #define SET_OFF_DUE_TO_TANK_VOLUME (1 << 10)
+
+#define TEMP_FOR_COMP_READING  (1 << 11)
 
 // CAN'T ADD ANY MORE wuthout changeing uint8_t to uint16_t 
 //#define CONDITION_SCOPE_GLOBAL (1 << 3) // For conditions Set if global interlock, clear if local restriction

@@ -2050,7 +2050,8 @@ function renderConfigTable() {
         if (field.readonly) {
             const span = document.createElement('span');
             span.textContent = field.value;
-            span.style.fontSize = '0.65em'; // using "small" is another option.
+            //span.style.fontSize = '0.65em'; // using "small" is another option.
+            span.style.fontSize = 'small'; // using "small" is another option.
             return span;
         }
 
