@@ -87,6 +87,9 @@ typedef struct {
     acd_uom_t uom;
     acd_uom_t uom2;
     acd_operator_t operator;
+    char *label2;
+    char *label3;
+    char *label4;
 } acd_staging_t;
 
 static acd_staging_t _staging;
@@ -147,6 +150,10 @@ void clear_staging() {
     _staging.uom = UOM_NONE;
     _staging.uom2 = UOM_NONE;
     _staging.operator = ACD_OP_NONE;
+    if (_staging.label2) { free(_staging.label2); _staging.label2 = NULL; }
+    if (_staging.label3) { free(_staging.label3); _staging.label3 = NULL; }
+    if (_staging.label4) { free(_staging.label4); _staging.label4 = NULL; }
+    
 }
 
 void action_staging() {
@@ -288,6 +295,7 @@ bool setConfigValue(struct aquachemdata *acdata, char *param, char *value) {
 
                 // Dynamic Linked List Staging Parser
                 if (strstr(param, "_label") != NULL) {
+                //if (KEY_ENDS_WITH_IC(param, "_label")) { // Should use this in future.
                     action_staging();
                     clear_staging();
                     LOG(LOG_DEBUG,"Start new device %s\n",value);
@@ -451,11 +459,27 @@ bool setConfigValue(struct aquachemdata *acdata, char *param, char *value) {
                 else if (strncasecmp(param, "prs_sensor_max_value", 20) == 0) {
                     _staging.value3 = strtof(value, NULL);
                 }
+                else if (strncasecmp(param, "prs_sensor_label_temperature", 28) == 0) {
+                  if (_staging.label2) free(_staging.label2);
+                    _staging.label2 = strdup(value);
+                }
                 else if (strncasecmp(param, "ec_sensor_k", 11) == 0) {
                     _staging.value = strtof(value, NULL);
                 }
                 else if (strncasecmp(param, "ec_sensor_tds_factor", 20) == 0) {
                     _staging.value2 = strtof(value, NULL);
+                }
+                else if (STARTS_WITH_IC(param, "ec_sensor_label_tds")) {
+                    if (_staging.label2) free(_staging.label2);
+                    _staging.label2 = strdup(value);
+                }
+                else if (STARTS_WITH_IC(param, "ec_sensor_label_salinity")) {
+                    if (_staging.label3) free(_staging.label3);
+                    _staging.label3 = strdup(value);
+                }
+                else if (STARTS_WITH_IC(param, "ec_sensor_label_sg")) {
+                    if (_staging.label4) free(_staging.label4);
+                    _staging.label4 = strdup(value);
                 }
                 else if (strncasecmp(param, "gpio_pulse_k_factor", 19) == 0) {
                     _staging.value = strtof(value, NULL);
@@ -471,7 +495,7 @@ bool setConfigValue(struct aquachemdata *acdata, char *param, char *value) {
                 }
                 return true;
             }
-
+ 
             // Standard Entries
             switch (_cfgParams[i].value_type) {
                 case CFG_STRING:
@@ -746,6 +770,7 @@ int save_aquachem_config_json(const char* inBuf, int inSize, char* outBuf, int o
             
             if (!k || !v || !cJSON_IsString(k)) continue;
 
+            LOG(LOG_DEBUG,"Passing key=%s, value=%s, type=%s\n",k->valuestring, v->valuestring, t->valuestring);
             // Find the bitmask for this parameter ---
             int mask = 0;
             for (int i = 0; i < CFG_PARAM_COUNT; i++) {
@@ -834,7 +859,7 @@ int save_aquachem_config_json(const char* inBuf, int inSize, char* outBuf, int o
             // --- THE FIX: Explicitly extract and write the Label FIRST ---
             cJSON *label = cJSON_GetObjectItem(block, "label");
             cJSON *type_id = cJSON_GetObjectItem(block, "block_type_id");
-
+ 
             if (label && cJSON_IsString(label) && type_id && cJSON_IsNumber(type_id))
             {
                 int type = type_id->valueint;
@@ -843,6 +868,8 @@ int save_aquachem_config_json(const char* inBuf, int inSize, char* outBuf, int o
                 cJSON *ID = cJSON_GetObjectItem(block, "ID");
                 const char *id = cJSON_GetStringValue(ID);
      
+                LOG(LOG_DEBUG,"Passing new block id=%s\n",id);
+
                 acd_type_t acd_type = ACD_TYPE_NONE;
 
                 if (type >= ACD_TYPE_MIN && type <= ACD_TYPE_MAX) {acd_type = type;}
@@ -854,7 +881,7 @@ int save_aquachem_config_json(const char* inBuf, int inSize, char* outBuf, int o
                     case ACD_TYPE_EZO_PH:      prefix = "ph_sensor";   sensor_type = "ezo"; break;
                     case ACD_TYPE_EZO_ORP:     prefix = "orp_sensor";  sensor_type = "ezo"; break;
                     case ACD_TYPE_EZO_PRS:     prefix = "prs_sensor";  sensor_type = "ezo"; break;
-                    case ACD_TYPE_I2C_PRS:     prefix = "prs_sensor";  sensor_type = "i2c"; break;
+                    case ACD_TYPE_I2C_PRS:     prefix = "prs_sensor";  break;
                     case ACD_TYPE_EZO_TEMP:    prefix = "temp_sensor"; sensor_type = "ezo"; break;
                     case ACD_TYPE_EZO_EC:      prefix = "ec_sensor";   sensor_type = "ezo"; break;
                     case ACD_TYPE_EZO_PMP:     prefix = "ezo_doser";   break;
@@ -893,6 +920,8 @@ int save_aquachem_config_json(const char* inBuf, int inSize, char* outBuf, int o
                     cJSON *v = cJSON_GetObjectItem(fld, "value");                    
                     if (!k || !v || !cJSON_IsString(k)) continue;
 
+                    LOG(LOG_DEBUG,"Passing key=%s, value=%s\n",k->valuestring, v->valuestring);
+
                     size_t prefix_len = strlen(prefix);
 
                     // Ignore keys that match prefix_id, since they have already been written.
@@ -913,8 +942,11 @@ int save_aquachem_config_json(const char* inBuf, int inSize, char* outBuf, int o
                     
                     if (is_valid_config(k->valuestring, val_str)) {
                         // Skip re-writing the label if the UI accidentally included it in the fields array, or if the value is empty
-                        if (strstr(k->valuestring, "_label") == NULL && strlen(val_str) > 0 ) {
+                        //if (strstr(k->valuestring, "_label") == NULL && strlen(val_str) > 0 ) {
+                        if ( !KEY_ENDS_WITH_IC(k->valuestring, "_label") && strlen(val_str) > 0) {
                             fprintf(fp, "%s=%s\n", k->valuestring, val_str);
+                        } else {
+                          //LOG(LOG_DEBUG,"Skipping writing %s=%s\n",k->valuestring,val_str);
                         }
                     } else {
                         validation_failed = true;
@@ -1291,6 +1323,26 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
                 duration_seconds_to_string(curr->stats.tau_seconds, tmp_buf, sizeof(tmp_buf));
                 cJSON_AddStringToObject(s_item, "value", curr->stats.tau_seconds > 0.0 ? tmp_buf : "");
                 cJSON_AddItemToArray(block_fields, s_item);
+
+                if (curr->type == ACD_TYPE_EZO_EC) {
+                  for (acd_key_t *child = curr->next; child != NULL; child = child->child) {
+                    f_item = cJSON_CreateObject();
+                    if (isMASKSET(child->data.ezo.flags, EC_TDS)) {
+                      cJSON_AddStringToObject(f_item, "key", "ec_sensor_label_tds");
+                    } else if (isMASKSET(child->data.ezo.flags, EC_SALINITY)) {
+                      cJSON_AddStringToObject(f_item, "key", "ec_sensor_label_salinity");
+                    } else if (isMASKSET(child->data.ezo.flags, EC_SPECIFIC_GRAVITY)) {
+                      cJSON_AddStringToObject(f_item, "key", "ec_sensor_label_sc");
+                    } else {
+                      cJSON_Delete(f_item);
+                      continue;
+                    }
+                    cJSON_AddStringToObject(f_item, "type", "string");
+                    cJSON_AddBoolToObject(f_item, "readonly", false);
+                    cJSON_AddStringToObject(f_item, "value", child->label);
+                    cJSON_AddItemToArray(block_fields, f_item);
+                  }
+                }
                 break;
 
             case ACD_TYPE_I2C_PRS:
@@ -1310,7 +1362,15 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
                 cJSON_AddStringToObject(f_item, "value", i2c_get_driver_name(curr->data.i2c.type));
                 cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_I2C_PRS_DRIVERS));
                 cJSON_AddItemToArray(block_fields, f_item);
-
+/*
+                f_item = cJSON_CreateObject();
+                cJSON_AddStringToObject(f_item, "key", "prs_sensor_model");
+                cJSON_AddStringToObject(f_item, "type", "select");
+                cJSON_AddBoolToObject(f_item, "readonly", false);
+                cJSON_AddStringToObject(f_item, "value", i2c_get_driver_name(curr->data.i2c.type));
+                cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_I2C_PRS_DRIVERS));
+                cJSON_AddItemToArray(block_fields, f_item);
+*/
                 f_item = cJSON_CreateObject();
                 cJSON_AddStringToObject(f_item, "key", "prs_sensor_address");
                 cJSON_AddStringToObject(f_item, "type", "text"); 
@@ -1348,6 +1408,15 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
                 cJSON_AddBoolToObject(f_item, "readonly", false);
                 cJSON_AddFloat(f_item, "value", curr->data.i2c.max_value);
                 cJSON_AddItemToArray(block_fields, f_item);
+
+                if (curr->child) {
+                  f_item = cJSON_CreateObject();
+                  cJSON_AddStringToObject(f_item, "key", "prs_sensor_label_temperature");
+                  cJSON_AddStringToObject(f_item, "type", "text");
+                  cJSON_AddBoolToObject(f_item, "readonly", false);
+                  cJSON_AddStringToObject(f_item, "value", curr->child->label);
+                  cJSON_AddItemToArray(block_fields, f_item);
+                }
                 
                 break;
             
@@ -2389,7 +2458,7 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
     // Define: I2C PRS
     drv = cJSON_CreateObject();
     cJSON_AddNumberToObject(drv, "block_type_id", ACD_TYPE_I2C_PRS);
-    cJSON_AddStringToObject(drv, "driver_type", "i2c sensor");
+    cJSON_AddStringToObject(drv, "driver_type", "i2c_sensor");
     cJSON_AddStringToObject(drv, "default_label", "New I2C Pressure sensor");
     df_arr = cJSON_AddArrayToObject(drv, "fields");
 
@@ -2398,6 +2467,7 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
     cJSON_AddStringToObject(df_item, "type", "select");
     cJSON_AddBoolToObject(df_item, "readonly", false);
     cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_I2C_PRS_DRIVERS));
+    cJSON_AddStringToObject(df_item, "value", "PTE7300");
     cJSON_AddItemToArray(df_arr, df_item);
 
     df_item = cJSON_CreateObject();
@@ -2412,6 +2482,20 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
     cJSON_AddStringToObject(df_item, "key", "prs_sensor_statistics");
     cJSON_AddStringToObject(df_item, "type", "text");
     cJSON_AddStringToObject(df_item, "value", "");
+    cJSON_AddItemToArray(df_arr, df_item);
+
+    df_item = cJSON_CreateObject();
+    cJSON_AddStringToObject(df_item, "key", "prs_sensor_min_value");
+    cJSON_AddStringToObject(df_item, "type", "number");
+    cJSON_AddBoolToObject(df_item, "readonly", false);
+    cJSON_AddNumberToObject(df_item, "value", 0);
+    cJSON_AddItemToArray(df_arr, df_item);
+
+    df_item = cJSON_CreateObject();
+    cJSON_AddStringToObject(df_item, "key", "prs_sensor_max_value");
+    cJSON_AddStringToObject(df_item, "type", "number");
+    cJSON_AddBoolToObject(df_item, "readonly", false);
+    cJSON_AddNumberToObject(df_item, "value", 10);
     cJSON_AddItemToArray(df_arr, df_item);
 
     cJSON_AddItemToArray(available_drivers, drv);
@@ -2623,7 +2707,7 @@ void print_config (struct aquachemdata *acdata)
       case ACD_TYPE_GPIO_OUTPUT: type_str = "Output (GPIO)"; break;
       case ACD_TYPE_GPIO_INPUT:  type_str = "Input  (GPIO)"; break;
       case ACD_TYPE_GPIO_PULSE:  type_str = "Pulse  (GPIO)"; break;
-      
+
       case ACD_TYPE_I2C_PRS:
         type_str = "sensor (I2C Pressure)";
         snprintf(buffer, sizeof(buffer), "(%s)", curr->data.i2c.type == I2C_SENSOR_PTE7300 ? "PTE7300" : "UNKNOWN");
@@ -3192,16 +3276,18 @@ void add_sensor_ezo(const acd_staging_t *st) {
       child_TDS_node->scope = new_node->scope;
       child_TDS_node->data.ezo.flags = EC_TDS;
       new_node->child = child_TDS_node;
-      char *child_TDS_label = replace_or_append_suffix(
-        st->label, 
-        (const char*[]){"conductivity", NULL}, 
-        "Total Dissolved Solids"
-      );
-      child_TDS_node->label = generate_label(hex_to_str(st->address), child_TDS_node->type, child_TDS_label);
+
+      if (st->label2) {
+        child_TDS_node->label = generate_label(hex_to_str(st->address), child_TDS_node->type, st->label2);
+      } else {
+        char * child_TDS_label = replace_or_append_suffix(st->label, (const char*[]){"conductivity", NULL}, "Total Dissolved Solids");
+        child_TDS_node->label = generate_label(hex_to_str(st->address), child_TDS_node->type, child_TDS_label);
+        free(child_TDS_label); // Free the temporary label string after use
+      }
       append_to_key_list(child_TDS_node);
       LOG(LOG_NOTICE, "Added I2C Sensor: %s, from I2C Conductivity Sensor: %s", child_TDS_node->label, new_node->label);
-      free(child_TDS_label); // Free the temporary label string after use
-
+      
+      // -------------
       acd_key_t *child_PSU_node = malloc(sizeof(acd_key_t));
       if (!child_PSU_node) return;
       child_PSU_node->flags = ACD_FLAG_VIRTUAL;
@@ -3211,16 +3297,18 @@ void add_sensor_ezo(const acd_staging_t *st) {
       child_PSU_node->scope = new_node->scope;
       child_PSU_node->data.ezo.flags = EC_SALINITY;
       child_TDS_node->child = child_PSU_node;
-      char *child_PSU_label = replace_or_append_suffix(
-        st->label, 
-        (const char*[]){"conductivity", NULL}, 
-        "Salinity"
-      );
-      child_PSU_node->label = generate_label(hex_to_str(st->address), child_PSU_node->type, child_PSU_label);
+
+      if (st->label3) {
+        child_PSU_node->label = generate_label(hex_to_str(st->address), child_PSU_node->type, st->label3);
+      } else {
+        char *child_PSU_label = replace_or_append_suffix( st->label, (const char*[]){"conductivity", NULL}, "Salinity");
+        child_PSU_node->label = generate_label(hex_to_str(st->address), child_PSU_node->type, child_PSU_label);
+        free(child_PSU_label); // Free the temporary label string after use
+      }
       append_to_key_list(child_PSU_node);
       LOG(LOG_NOTICE, "Added I2C Sensor: %s, from I2C Conductivity Sensor: %s", child_PSU_node->label, new_node->label);
-      free(child_PSU_label); // Free the temporary label string after use
-
+      
+      // ---------------
       acd_key_t *child_SG_node = malloc(sizeof(acd_key_t));
       if (!child_SG_node) return;
       child_SG_node->flags = ACD_FLAG_VIRTUAL;
@@ -3231,24 +3319,16 @@ void add_sensor_ezo(const acd_staging_t *st) {
       child_SG_node->data.ezo.flags = EC_SPECIFIC_GRAVITY;
       child_PSU_node->child = child_SG_node;
       child_SG_node->child = NULL;
-      char *child_SG_label = replace_or_append_suffix(
-        st->label, 
-        (const char*[]){"conductivity", NULL}, 
-        "Specific Gravity"
-      );
-      child_SG_node->label = generate_label(hex_to_str(st->address), child_SG_node->type, child_SG_label);
+
+      if (st->label4) {
+        child_SG_node->label = generate_label(hex_to_str(st->address), child_SG_node->type, st->label4);
+      } else {
+        char *child_SG_label = replace_or_append_suffix(st->label, (const char*[]){"conductivity", NULL}, "Specific Gravity");
+        child_SG_node->label = generate_label(hex_to_str(st->address), child_SG_node->type, child_SG_label);
+        free(child_SG_label); // Free the temporary label string after use
+      }
       append_to_key_list(child_SG_node);
       LOG(LOG_NOTICE, "Added I2C Sensor: %s, from I2C Conductivity Sensor: %s", child_SG_node->label, new_node->label);
-      free(child_SG_label); // Free the temporary label string after use
-
-
-      /*
-  EC_OUTPUT_CONDUCTIVITY     = 1 << 0,
-  EC_OUTPUT_TDS              = 1 << 1,
-  EC_OUTPUT_SALINITY         = 1 << 2,
-  EC_OUTPUT_SPECIFIC_GRAVITY = 1 << 3
-     */
-
     }
 }
 
@@ -3541,19 +3621,19 @@ void add_sensor_i2c(const acd_staging_t *st) {
       new_i2c_temp->type = ACD_TYPE_I2C_TEMP;
       new_i2c_temp->uom = UOM_CELSIUS;
 
-      char *new_i2c_temp_label = replace_or_append_suffix(
-        st->label, 
-        (const char*[]){"pressure", "psi", "bar", NULL}, 
-        " Temperature"
-      );
-
-      new_i2c_temp->label = generate_label(hex_to_str(st->address), new_i2c_temp->type, new_i2c_temp_label);
+      if (st->label2) {
+        new_i2c_temp->label = generate_label(hex_to_str(st->address), new_i2c_temp->type, st->label2);
+      } else {
+        char *new_i2c_temp_label = replace_or_append_suffix(st->label, (const char*[]){"pressure", "psi", "bar", NULL}, " Temperature");
+        new_i2c_temp->label = generate_label(hex_to_str(st->address), new_i2c_temp->type, new_i2c_temp_label);
+        free(new_i2c_temp_label); // Free the temporary label string after use
+      }
 
       append_to_key_list(new_i2c_temp);
 
       LOG(LOG_NOTICE, "Added I2C Temperature Sensor: %s, from I2C Pressure Sensor: %s, Address: 0x%02x", new_i2c_temp->label, new_node->label, new_node->data.i2c.address);
     
-      free(new_i2c_temp_label); // Free the temporary label string after use
+      
 
       //LOG(LOG_NOTICE, "Added I2C Pressure Sensor: %s, Address: 0x%02x, Min: %.2f, Max: %.2f", new_node->label, new_node->data.i2c.address, new_node->data.i2c.min_value, new_node->data.i2c.max_value);
     }

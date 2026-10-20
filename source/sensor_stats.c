@@ -452,6 +452,7 @@ void calculate_dose_running_total(acd_key_t *key, float dose_ml)
 void reset_dose_running_total(acd_key_t *key)
 {
   if (!key || !IS_RUNNING_DOSE_ENABLED(key)) {
+    LOG(LOG_INFO, "Can't reset running total for %s, Running total is not enabled\n",key->label);
     return;
   }
   

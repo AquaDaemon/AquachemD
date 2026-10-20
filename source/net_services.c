@@ -77,11 +77,68 @@ bool write_systemd_logmessages_2file(char *fname, int lines);
     tolower((unsigned char)(str)[(len)-1]) == tolower((unsigned char)(SUFFIX)[3]) \
 )
 
+#ifdef USE_DOSE_EVENT_QUEUE
+
+#define DOSE_EVENT_MAX  3
+#define DOSE_TOTAL_ONLY (-1.0f)
+
+typedef struct {
+    acd_key_t *key;
+    uint32_t   runtime;
+    float      dose_ml;     // DOSE_TOTAL_ONLY (-1) means just update running total
+} dose_event_t;
+
+static struct {
+    dose_event_t ev[DOSE_EVENT_MAX];
+    uint8_t      count;
+} _dose_q;
+
+static pthread_mutex_t _dose_q_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+// Producer. Returns false if the queue is full (event dropped).
+bool post_dosing_event(acd_key_t *key, uint32_t runtime, float total_ml)
+{
+    bool ok = false;
+
+    pthread_mutex_lock(&_dose_q_mutex);
+    if (_dose_q.count < DOSE_EVENT_MAX) {
+        dose_event_t *e = &_dose_q.ev[_dose_q.count++];
+        e->key     = key;
+        e->runtime = runtime;
+        e->dose_ml = total_ml;
+        ok = true;
+    }
+    pthread_mutex_unlock(&_dose_q_mutex);
+
+    return ok;
+}
+
+// Consumer. Copies out the oldest event; returns false if none pending.
+bool pop_dosing_event(dose_event_t *out)
+{
+    bool ok = false;
+
+    pthread_mutex_lock(&_dose_q_mutex);
+    if (_dose_q.count > 0) {
+        *out = _dose_q.ev[0];
+        _dose_q.count--;
+        memmove(&_dose_q.ev[0], &_dose_q.ev[1],
+                _dose_q.count * sizeof(dose_event_t));
+        memset(&_dose_q.ev[_dose_q.count], 0, sizeof(dose_event_t));
+        ok = true;
+    }
+    pthread_mutex_unlock(&_dose_q_mutex);
+
+    return ok;
+}
+
+#else // USE_DOSE_EVENT_QUEUE
+
 static struct {
     volatile bool is_dirty;
     acd_key_t *key;
     uint32_t runtime; 
-    float dose_ml;
+    float dose_ml;     // -1 means just update runnung total.
 } _dose_event;
 
 void reset_dose_event()
@@ -92,6 +149,7 @@ void reset_dose_event()
   _dose_event.dose_ml = 0;
 }
 
+// if total_ml == -1, just update the runing total.
 void post_dosing_event(acd_key_t *key, uint32_t runtime, float total_ml)
 {
    // Store info and set flag for next run.
@@ -103,6 +161,7 @@ void post_dosing_event(acd_key_t *key, uint32_t runtime, float total_ml)
    _dose_event.is_dirty = true;
    //_aquachemd_data.is_dirty = true;
 }
+#endif // USE_DOSE_EVENT_QUEUE
 
 struct mg_connection *mg_next(struct mg_mgr *s, struct mg_connection *conn) {
   return conn == NULL ? s->conns : conn->next;
@@ -1091,6 +1150,15 @@ void send_mqtt_level_float_msg(struct mg_connection *nc, char *ID, char *subtopi
   send_mqtt(nc, mqtt_pub_topic, msg);
 }
 
+void send_mqtt_running_dose_msg(struct mg_connection *nc, char *ID, float value) {
+  static char mqtt_pub_topic[MQTT_PUB_TOPIC_SIZE+2];
+  static char msg[11];
+
+  sprintf(msg, "%.2f", value);
+  snprintf(mqtt_pub_topic, sizeof(mqtt_pub_topic), "%s/%s/%s", _acdconfig_.mqtt_aquachemd_topic, ID, MQTT_TL_RUNNING_DOSE);
+  //LOG(LOG_DEBUG, "MQTT send %.2f to topic %s/%s\n",value,_acdconfig_.mqtt_aquachemd_topic,mqtt_pub_topic);
+  send_mqtt(nc, mqtt_pub_topic, msg);
+}
 /*
 // replaced with send_mqtt_acd_state_msg()
 void send_mqtt_key_status_msg(struct mg_connection *nc, acd_key_t *key) {
@@ -1173,6 +1241,9 @@ void mqtt_broadcast_aquachemdstate(struct mg_connection *nc, bool force_all)
         send_mqtt_timer_state_msg(nc, curr->ID, ACD_LED_OFF, 0, caculate_dose_time(_aquachemd_data, curr));
       }
       send_mqtt_acd_state_msg(nc, curr->ID, curr->state);
+      if (IS_RUNNING_DOSE_ENABLED(curr) ) {
+        send_mqtt_running_dose_msg(nc, curr->ID, curr->dose_stats.running_total_ml);
+      }
     } else {
       send_mqtt_acd_state_msg(nc, curr->ID, curr->state);
       if (curr->state == ACD_LED_ON) {
@@ -1229,31 +1300,51 @@ void mqtt_broadcast_aquachemd_dose_event(struct mg_connection *nc)
 
   LOG(LOG_INFO, "Broadcasting Aquachemd dose event to MQTT\n");
 
+#ifdef USE_DOSE_EVENT_QUEUE
+  dose_event_t ev;
+  while (pop_dosing_event(&ev)) {
+    for (c = mg_next(nc->mgr, NULL); c != NULL; c = mg_next(nc->mgr, c)) {
+      if (is_mqtt(c)) {
+        if (ev.dose_ml >= 0.0) {
+          snprintf(topic, sizeof(topic), "%s/%s", ev.key->ID,MQTT_TL_LAST_DOSE);
+          LOG(LOG_DEBUG, "MQTT send %.2f to topic %s/%s\n",ev.dose_ml,_acdconfig_.mqtt_aquachemd_topic,topic);
+          send_mqtt_float_msg(c, topic, ev.dose_ml);
+        }
+
+        if (IS_RUNNING_DOSE_ENABLED(ev.key)) {
+          send_mqtt_running_dose_msg(c, ev.key->ID, ev.key->dose_stats.running_total_ml);
+        /*
+          snprintf(topic, sizeof(topic), "%s/%s", ev.key->ID,MQTT_TL_RUNNING_DOSE);
+          LOG(LOG_DEBUG, "MQTT send %.2f to topic %s/%s\n",ev.key->dose_stats.running_total_ml,_acdconfig_.mqtt_aquachemd_topic,topic);
+          send_mqtt_float_msg(c, topic, ev.key->dose_stats.running_total_ml);
+          */
+        }
+      }
+    }
+  }
+
+#else // USE_DOSE_EVENT_QUEUE
   if (!_dose_event.is_dirty) { return; }
-/*
-  snprintf(topic, sizeof(topic), "%s/%s", _dose_event.key->ID, 
-                          (_dose_event.key->flags & PH_PUMP)  ? MQTT_TL_DOSE_PH : 
-                          (_dose_event.key->flags & ORP_PUMP) ? MQTT_TL_DOSE_ORP :
-                          (_dose_event.key->flags & H2O_PUMP) ? MQTT_TL_DOSE_H2O : MQTT_TL_DOSE_UNKNOWN );
-  */
-  //snprintf(ld_topic, sizeof(topic), "%s/%s", _dose_event.key->ID,MQTT_TL_LAST_DOSE);
-  //snprintf(rt_topic, sizeof(topic), "%s/%s", _dose_event.key->ID,MQTT_TL_RUNNING_DOSE);
 
   for (c = mg_next(nc->mgr, NULL); c != NULL; c = mg_next(nc->mgr, c)) {
     if (is_mqtt(c)) {
-      snprintf(topic, sizeof(topic), "%s/%s", _dose_event.key->ID,MQTT_TL_LAST_DOSE);
-      LOG(LOG_DEBUG, "MQTT send %.2f to topic %s/%s\n",_dose_event.dose_ml,_acdconfig_.mqtt_aquachemd_topic,topic);
-      send_mqtt_float_msg(c, topic, _dose_event.dose_ml);
+      if (_dose_event.dose_ml >= 0.0) {
+        snprintf(topic, sizeof(topic), "%s/%s", _dose_event.key->ID,MQTT_TL_LAST_DOSE);
+        LOG(LOG_DEBUG, "MQTT send %.2f to topic %s/%s\n",_dose_event.dose_ml,_acdconfig_.mqtt_aquachemd_topic,topic);
+        send_mqtt_float_msg(c, topic, _dose_event.dose_ml);
+      }
 
       if (IS_RUNNING_DOSE_ENABLED(_dose_event.key)) {
-        snprintf(topic, sizeof(topic), "%s/%s", _dose_event.key->ID,MQTT_TL_RUNNING_DOSE);
-        LOG(LOG_DEBUG, "MQTT send %.2f to topic %s/%s\n",_dose_event.key->dose_stats.running_total_ml,_acdconfig_.mqtt_aquachemd_topic,topic);
-        send_mqtt_float_msg(c, topic, _dose_event.key->dose_stats.running_total_ml);
+        send_mqtt_running_dose_msg(c, _dose_event.key->ID, _dose_event.key->dose_stats.running_total_ml);        
+        //snprintf(topic, sizeof(topic), "%s/%s", _dose_event.key->ID,MQTT_TL_RUNNING_DOSE);
+        //LOG(LOG_DEBUG, "MQTT send %.2f to topic %s/%s\n",_dose_event.key->dose_stats.running_total_ml,_acdconfig_.mqtt_aquachemd_topic,topic);
+        //send_mqtt_float_msg(c, topic, _dose_event.key->dose_stats.running_total_ml);
       }
     }
   }
   
   reset_dose_event();
+#endif // USE_DOSE_EVENT_QUEUE
 }
 
 void reset_last_mqtt_status()

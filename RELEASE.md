@@ -9,7 +9,7 @@ All notable changes to AqualinkD are documented here. Releases are listed in rev
 * TODO - Change virtual ID's
 * TODO - Fix Log Level in web config (also saving system value and not selected value)
 * TODO - Labels for virtual sensors
-* TODO - GPIO Pulse in HA????
+* TOTO - Update HA on reset of running_dose_ml   <- coded not tested.
 
 - Added sensor conditions, Set conditions on sensor values (<,>,=,<=,>=)
 - Fixed bug with EC temperature correction readings

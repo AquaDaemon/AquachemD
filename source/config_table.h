@@ -62,6 +62,9 @@ CFG_ENTRY( "remote_instance_id_suffix",  remote_instance_id_suffix,        NULL,
 /* ---  GPIO CONFIGURATION --- */
 CFG_ENTRY( "gpio_chip",              gpio_chip,              "/dev/gpiochip0",     CFG_STRING,  CFG_ADVANCED,                       0,                NULL )
 
+// Need to add the below.  BUT Also need to figure out the best way to set it.
+//CFG_ENTRY( "i2c_bus",                gpio_chip,              "/dev/i2c-1",         CFG_STRING,  CFG_ADVANCED,                       0,                NULL )
+
 /* --- POLLING & CONVERSION --- */
 CFG_ENTRY( "sensor_poll_time",       sensor_poll_time,       60,                   CFG_INT,     0,                                  0,                NULL )
 
@@ -150,6 +153,7 @@ CFG_ENTRY( "orp_sensor_statistics",  keys,                   NULL,              
 CFG_ENTRY( "prs_sensor_label",       keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "prs_sensor_ID",          keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "prs_sensor_type",        keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "prs_sensor_model",        keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "prs_sensor_address",     keys,                   NULL,                 CFG_HEX,     CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 //CFG_ENTRY( "prs_sensor_scope_global",keys,                   NULL,                 CFG_BOOL,    CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "prs_sensor_interlock_scope", keys,               NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
@@ -157,6 +161,7 @@ CFG_ENTRY( "prs_sensor_statistics",  keys,                   NULL,              
 // For I2C (not EZO)
 CFG_ENTRY( "prs_sensor_min_value",   keys,                   NULL,                 CFG_FLOAT,   CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "prs_sensor_max_value",   keys,                   NULL,                 CFG_FLOAT,   CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "prs_sensor_label_temperature", keys,             NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 
 CFG_ENTRY( "ec_sensor_label",          keys,                 NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "ec_sensor_ID",             keys,                 NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
@@ -167,6 +172,15 @@ CFG_ENTRY( "ec_sensor_statistics",     keys,                 NULL,              
 //0.1, 1, 10
 CFG_ENTRY( "ec_sensor_k",              keys,                 NULL,                 CFG_FLOAT,   CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "ec_sensor_tds_factor",     keys,                 NULL,                 CFG_FLOAT,   CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+
+CFG_ENTRY( "ec_sensor_label_tds",      keys,                 NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "ec_sensor_label_salinity", keys,                 NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "ec_sensor_label_sg",       keys,                 NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+
+
+
+
+
 
 CFG_ENTRY( "mqtt_sensor_label",       keys,                  NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "mqtt_sensor_ID",          keys,                  NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
