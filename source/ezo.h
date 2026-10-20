@@ -168,8 +168,10 @@ static inline int ezo_sensor_addr(const ezo_sensor_t *sensor)
   return sensor ? (int)sensor->address : -1;
 }
 
-
 // ─── Bus utilities ────────────────────────────────────────────────────────────
+
+void ezo_set_bus(const char *bus);
+
 int  ezo_bus_available();
 //void ezo_i2cdetect();
 

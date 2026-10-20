@@ -294,8 +294,8 @@ bool setConfigValue(struct aquachemdata *acdata, char *param, char *value) {
                 }
 
                 // Dynamic Linked List Staging Parser
-                if (strstr(param, "_label") != NULL) {
-                //if (KEY_ENDS_WITH_IC(param, "_label")) { // Should use this in future.
+                //if (strstr(param, "_label") != NULL) {
+                if (KEY_ENDS_WITH_IC(param, "_label")) { // Should use this in future.
                     action_staging();
                     clear_staging();
                     LOG(LOG_DEBUG,"Start new device %s\n",value);
@@ -3013,6 +3013,15 @@ void generate_id(acd_key_t *node, int index) {
   node->ID = strdup(buf);
 }
 
+/*
+void generate_child_id(acd_key_t *node) {
+  char buf[32];
+  node->index = index;
+  snprintf(buf, sizeof(buf), "%s_%d", prefix_for_type(node->type), index);
+  node->ID = strdup(buf);
+}
+*/
+
 // Parses "PREFIX_123" into prefix and index. False if it doesn't match that shape.
 static bool parse_id_format(const char *id, char *prefix_out, size_t prefix_out_size, int *index_out) {
   const char *underscore = strrchr(id, '_');
@@ -3038,6 +3047,24 @@ static bool id_already_used(struct aquachemdata *acdata, const char *id, acd_key
     if (strcmp(curr->ID, id) == 0) return true;
   }
   return false;
+}
+
+void assign_child_ids(acd_key_t *parent)
+{
+  // No children. Pump have tank as a child, but tank has it's own ID type, so ignore.
+  if (!parent->child || IS_PUMP(parent->type))
+    return;
+
+  int index=1;
+  char buf[32];
+  for (acd_key_t *child = parent->child; child != NULL; child = child->child) {
+    if (child->ID || child->type == ACD_TYPE_VIR_TANK) continue; // Tanks get their own unique ID
+
+    snprintf(buf, sizeof(buf), "%s.%d", parent->ID, index++);
+    child->ID = strdup(buf);
+    LOG(LOG_DEBUG, "Created ID for %s, %s",child->label,child->ID);
+  }
+  
 }
 
 void assign_missing_ids(struct aquachemdata *acdata) {
@@ -3082,10 +3109,14 @@ void assign_missing_ids(struct aquachemdata *acdata) {
   }
 
   for (acd_key_t *curr = acdata->keys; curr != NULL; curr = curr->next) {
-    if (curr->ID) continue;
+    if (curr->ID) {
+        assign_child_ids(curr);
+        continue;
+    }
     id_prefix_index_t idx = prefix_index_for_type(curr->type);
     generate_id(curr, ++max_index[idx]);
     LOG(LOG_DEBUG, "Created ID for %s, %s",curr->label,curr->ID);
+    assign_child_ids(curr);
     curr->is_dirty = true; // needs writing back to config now that it's pinned
   }
 }

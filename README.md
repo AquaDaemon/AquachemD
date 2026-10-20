@@ -151,8 +151,17 @@ If you're building or adapting the physical sensor housing, [`flow cell design.m
 The release install script handles the whole setup — downloading the correct architecture's binary, installing it as a systemd service, and setting up the web UI:
 
 ```bash
+curl -fsSL https://aquadaemon.org/aquachemd/install.sh | sudo
+```
+or
+```bash
 curl -sSL https://raw.githubusercontent.com/aqualinkd/AquachemD/main/release/remote-install.sh | sudo bash
 ```
+If you want to install different version / remove etc, the below will give you more options.
+```bash
+curl -fsSL https://aquadaemon.org/aquachemd/install.sh | sudo bash -s -- help
+```
+
 
 This installs AquachemD as a systemd service (`aquachemd.service`) that starts on boot, alongside a starter config at `/etc/aquachemd.conf` (or wherever your install script places it) that you'll edit to match your actual sensor addresses and pump wiring.
 
@@ -214,7 +223,7 @@ gpio_doser_ml_per_second=2.18
 | `listen_address` | IP and port for the built-in web server. |
 | `log_level` | `DEBUG`, `INFO`, `NOTICE`, `WARNING`, `ERROR` |
 | `sensor_poll_time` | How often (seconds) sensors are polled. |
-| `log_sensor_readings` | Log every sensor reading, not just changes. |
+| `log_sensor_readings` | Report every sensor reading to the log. Useful for debugging when you don't want full debug output (default `no`) |
 | `single_instance` | Only allow one copy of AquachemD to run at a time (default `Yes`). |
 | `gpio_chip` | GPIO character device used for GPIO pins (default `/dev/gpiochip0`). |
 | `switch_max_runtime` | Maximum time (seconds) a switch/output may stay on before it is turned off (default `7200`). |
@@ -233,7 +242,6 @@ gpio_doser_ml_per_second=2.18
 | `mqtt_discovery_strict_availability` | Use strict availability reporting in Home Assistant discovery. ie Sensor not reading set to `unavailable` vs last value (default `No`). |
 | `mqtt_discovery_repost_sensors` | Re-publish received MQTT sensor/condition values back to MQTT under AquachemD topic (default `No`). |
 | `mqtt_timed_update` | Force a periodic MQTT update even if a value hasn't changed. (stops sensors reporting dead in HA)|
-| `mqtt_strict_avail` | When sensors are not reading,  (default `No`). |
 
 #### Readings
 | Option | Description |

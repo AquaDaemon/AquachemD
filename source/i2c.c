@@ -61,6 +61,14 @@ int pte7300_validate_status(unsigned short raw_status);
 // i2c_open() issues is redundant for them.  It is harmless unless a kernel driver
 // has claimed the address (EBUSY), in which case the transfer is refused.
 
+
+static const char *_I2C_BUS = I2C_GENERIC_BUS;
+
+void i2c_set_bus(const char *bus)
+{
+  _I2C_BUS = (bus != NULL) ? bus : I2C_GENERIC_BUS;
+}
+
 int i2c_bus_available(const char *bus_path)
 {
   int fd = i2c_open(bus_path, -1);      // proves the bus device opens; no address, no lock
@@ -198,7 +206,7 @@ static const char *i2c_query_device_type(int addr)
 
   // 1. Try PTE7300 probe: read 2 bytes from the STATUS register (0x36)
   unsigned char pte_buf[2];
-  if (i2c_read_reg(I2C_GENERIC_BUS, addr, PTE7300_REG_STATUS, pte_buf, 2) == I2C_SUCCESS) {
+  if (i2c_read_reg(_I2C_BUS, addr, PTE7300_REG_STATUS, pte_buf, 2) == I2C_SUCCESS) {
     unsigned short status_reg;
 #if PTE7300_LITTLE_ENDIAN
     status_reg = (unsigned short)(pte_buf[0] | (pte_buf[1] << 8));
@@ -215,7 +223,7 @@ static const char *i2c_query_device_type(int addr)
 
   // 2. Try Honeywell HSC/SSC probe: registerless 4-byte read
   unsigned char hsc_buf[4];
-  if (i2c_read_bytes(I2C_GENERIC_BUS, addr, hsc_buf, 4) == I2C_SUCCESS) {
+  if (i2c_read_bytes(_I2C_BUS, addr, hsc_buf, 4) == I2C_SUCCESS) {
     unsigned char status_bits = hsc_buf[0] & HSC_STATUS_MASK; // 0xC0 mask
     if (status_bits == HSC_STATUS_NORMAL || status_bits == HSC_STATUS_STALE) {
       return "HSC/SSC";
@@ -277,10 +285,10 @@ void i2c_detect(bool deepscan, bool usesyslog)
 {
   // addr = -1: one fd walks every address, so it takes no lock and no I2C_SLAVE
   // of its own; each probe takes that address's lock itself.
-  int fd = i2c_open(I2C_GENERIC_BUS, -1);
+  int fd = i2c_open(_I2C_BUS, -1);
   if (fd < 0) { perror("open i2c"); return; }
 
-  DIAG_LOG(usesyslog, "\nScanning I2C bus %s...\n\n", I2C_GENERIC_BUS);
+  DIAG_LOG(usesyslog, "\nScanning I2C bus %s...\n\n", _I2C_BUS);
   DIAG_LOG(usesyslog, "     0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f\n");
 
   int detected[128] = {0};
@@ -492,7 +500,7 @@ static int pte7300_write_cmd_crc(i2c_sensor_t *s, unsigned int cmd)
   // i2c_write_reg() is about to lock itself.)
   int hold_plain = (s->address != PTE7300_ADDR_CRC);
   if (hold_plain && i2c_lock_addr(s->address) != 0) return I2C_ERROR;
-  int rc = i2c_write_reg(I2C_GENERIC_BUS, PTE7300_ADDR_CRC, PTE7300_REG_CMD, payload, sizeof(payload));
+  int rc = i2c_write_reg(_I2C_BUS, PTE7300_ADDR_CRC, PTE7300_REG_CMD, payload, sizeof(payload));
   if (hold_plain) i2c_unlock_addr(s->address);
   return rc;
 }
@@ -514,14 +522,14 @@ static int pte7300_write_cmd(i2c_sensor_t *s, unsigned int cmd)
   data[0] = (unsigned char)((cmd >> 8) & 0xFF);
   data[1] = (unsigned char)(cmd & 0xFF);
 #endif
-  return i2c_write_reg(I2C_GENERIC_BUS, s->address, PTE7300_REG_CMD, data, 2);
+  return i2c_write_reg(_I2C_BUS, s->address, PTE7300_REG_CMD, data, 2);
 #endif
 }
 
 static int pte7300_read_i16(i2c_sensor_t *s, unsigned char reg, short *out)
 {
   unsigned char data[2];
-  int status = i2c_read_reg(I2C_GENERIC_BUS, s->address, reg, data, 2);
+  int status = i2c_read_reg(_I2C_BUS, s->address, reg, data, 2);
   if (status != I2C_SUCCESS) return status;
 
 #if PTE7300_LITTLE_ENDIAN
@@ -535,7 +543,7 @@ static int pte7300_read_i16(i2c_sensor_t *s, unsigned char reg, short *out)
 static int pte7300_read_u16(i2c_sensor_t *s, unsigned char reg, unsigned short *out)
 {
   unsigned char data[2];
-  int status = i2c_read_reg(I2C_GENERIC_BUS, s->address, reg, data, 2);
+  int status = i2c_read_reg(_I2C_BUS, s->address, reg, data, 2);
   if (status != I2C_SUCCESS) return status;
 
 #if PTE7300_LITTLE_ENDIAN
@@ -733,7 +741,7 @@ static i2c_reading_t hsc_get_reading(i2c_sensor_t *s)
   // No command needed — the device free-runs; just read the last conversion.
   // 4 bytes gets both pressure and temperature in one transaction.
   unsigned char buf[4];
-  int status = i2c_read_bytes(I2C_GENERIC_BUS, s->address, buf, sizeof(buf));
+  int status = i2c_read_bytes(_I2C_BUS, s->address, buf, sizeof(buf));
   if (status != I2C_SUCCESS) { result.status = status; return result; }
 
   unsigned char status_bits = buf[0] & HSC_STATUS_MASK;
@@ -774,7 +782,7 @@ int i2c_sensor_init(i2c_sensor_t *s, i2c_sensor_type_t type, int address, float 
 int i2c_sensor_is_connected(i2c_sensor_t *s)
 {
   // Same underlying check regardless of family — both just need an ACK.
-  return i2c_probe_address(I2C_GENERIC_BUS, s->address);
+  return i2c_probe_address(_I2C_BUS, s->address);
 }
 
 i2c_reading_t i2c_sensor_get_reading(i2c_sensor_t *s)
@@ -1483,7 +1491,7 @@ static int pte7300_write_cmd_crc(i2c_sensor_t *s, unsigned int cmd)
   // Wire frame after the CRC-mode slave address (0x6D): [reg][len/crc4][lo][hi][crc8]
   unsigned char payload[4] = { len_crc4_byte, lo, hi, crc8 };
 
-  return i2c_write_reg(I2C_GENERIC_BUS, PTE7300_ADDR_CRC, PTE7300_REG_CMD, payload, sizeof(payload));
+  return i2c_write_reg(_I2C_BUS, PTE7300_ADDR_CRC, PTE7300_REG_CMD, payload, sizeof(payload));
 }
 
 
@@ -1503,12 +1511,12 @@ static int pte7300_write_cmd(i2c_sensor_t *s, unsigned int cmd)
   data[0] = (unsigned char)((cmd >> 8) & 0xFF);
   data[1] = (unsigned char)(cmd & 0xFF);
 #endif
-  return i2c_write_reg(I2C_GENERIC_BUS, s->address, PTE7300_REG_CMD, data, 2);
+  return i2c_write_reg(_I2C_BUS, s->address, PTE7300_REG_CMD, data, 2);
 #endif
 }static int pte7300_read_i16(i2c_sensor_t *s, unsigned char reg, short *out)
 {
   unsigned char data[2];
-  int status = i2c_read_reg(I2C_GENERIC_BUS, s->address, reg, data, 2);
+  int status = i2c_read_reg(_I2C_BUS, s->address, reg, data, 2);
   if (status != I2C_SUCCESS) return status;
 
 #if PTE7300_LITTLE_ENDIAN
@@ -1522,7 +1530,7 @@ static int pte7300_write_cmd(i2c_sensor_t *s, unsigned int cmd)
 static int pte7300_read_u16(i2c_sensor_t *s, unsigned char reg, unsigned short *out)
 {
   unsigned char data[2];
-  int status = i2c_read_reg(I2C_GENERIC_BUS, s->address, reg, data, 2);
+  int status = i2c_read_reg(_I2C_BUS, s->address, reg, data, 2);
   if (status != I2C_SUCCESS) return status;
 
 #if PTE7300_LITTLE_ENDIAN
@@ -1718,7 +1726,7 @@ static i2c_reading_t hsc_get_reading(i2c_sensor_t *s)
   // No command needed — the device free-runs; just read the last conversion.
   // 4 bytes gets both pressure and temperature in one transaction.
   unsigned char buf[4];
-  int status = i2c_read_bytes(I2C_GENERIC_BUS, s->address, buf, sizeof(buf));
+  int status = i2c_read_bytes(_I2C_BUS, s->address, buf, sizeof(buf));
   if (status != I2C_SUCCESS) { result.status = status; return result; }
 
   unsigned char status_bits = buf[0] & HSC_STATUS_MASK;
@@ -1759,7 +1767,7 @@ int i2c_sensor_init(i2c_sensor_t *s, i2c_sensor_type_t type, int address, float 
 int i2c_sensor_is_connected(i2c_sensor_t *s)
 {
   // Same underlying check regardless of family — both just need an ACK.
-  return i2c_probe_address(I2C_GENERIC_BUS, s->address);
+  return i2c_probe_address(_I2C_BUS, s->address);
 }
 
 i2c_reading_t i2c_sensor_get_reading(i2c_sensor_t *s)

@@ -53,10 +53,18 @@
 // because i2c_open() treats a negative address as "no lock, no ioctl", and a NULL
 // sensor reaches us as -1 (see ezo_sensor_addr()).  i2c_open() then takes the
 // per-address lock, which i2c_close() (via ezo_close) releases.
+
+static const char *_I2C_BUS = I2C_BUS;
+
+void ezo_set_bus(const char *bus)
+{
+  _I2C_BUS = (bus != NULL) ? bus : I2C_BUS;
+}
+
 static int ezo_open(int address)
 {
   if (!i2c_addr_valid(address)) return EZO_ERROR;
-  return i2c_open(I2C_BUS, address);
+  return i2c_open(_I2C_BUS, address);
 }
 
 static int ezo_close(int fd)
@@ -334,10 +342,10 @@ void ezo_i2cdetect()
   // One fd walks every address, so it is opened with addr = -1 (no lock, no
   // I2C_SLAVE) and each probe takes that address's lock itself.  A device that is
   // mid-transaction on another thread is skipped until it is free.
-  int fd = i2c_open(I2C_BUS, -1);
+  int fd = i2c_open(_I2C_BUS, -1);
   if (fd < 0) { perror("open i2c"); return; }
 
-  printf("\nScanning I2C bus %s...\n\n", I2C_BUS);
+  printf("\nScanning I2C bus %s...\n\n", _I2C_BUS);
   printf("     0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f\n");
 
   int detected[128] = {0};
@@ -398,7 +406,7 @@ void ezo_i2cdetect()
 
 int ezo_bus_available()
 {
-  int fd = i2c_open(I2C_BUS, -1);   // just proves the bus device opens
+  int fd = i2c_open(_I2C_BUS, -1);   // just proves the bus device opens
   if (fd < 0) return 0;
   i2c_close(fd);
   return 1;
@@ -768,7 +776,7 @@ int pump_set_i2c_address(ezo_sensor_t *pump, int new_addr)
 
   if (!i2c_addr_valid(addr) || !i2c_addr_valid(new_addr)) return EZO_SYNTAX_ERR;
   if (new_addr == addr) return EZO_SUCCESS;
-  if (i2c_probe_address(I2C_BUS, new_addr)) return EZO_ERROR;   /* occupied */
+  if (i2c_probe_address(_I2C_BUS, new_addr)) return EZO_ERROR;   /* occupied */
   if (ezo_build(cmd, sizeof(cmd), "I2C,%d", new_addr) < 0) return EZO_SYNTAX_ERR;
 
   int rc = ezo_send_only(pump, cmd);
@@ -1082,7 +1090,7 @@ int ezo_bus_available()
 void ezo_i2cdetect(bool usesyslog)
 {
   DIAG_LOG(usesyslog, "\n");
-  DIAG_LOG(usesyslog, "[DUMMY] Simulated I2C bus scan on %s\n\n", I2C_BUS);
+  DIAG_LOG(usesyslog, "[DUMMY] Simulated I2C bus scan on %s\n\n", _I2C_BUS);
   DIAG_LOG(usesyslog, "     0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f\n");
   DIAG_LOG(usesyslog, "60:              62 63 64       67 68               \n\n");
   DIAG_LOG(usesyslog, "-\n");
@@ -1097,7 +1105,7 @@ void ezo_i2cdetect(bool usesyslog)
 /*
 void ezo_i2cdetect()
 {
-  printf("\n[DUMMY] Simulated I2C bus scan on %s\n\n", I2C_BUS);
+  printf("\n[DUMMY] Simulated I2C bus scan on %s\n\n", _I2C_BUS);
   printf("     0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f\n");
   printf("60:              62 63 64       67 68               \n\n");
   printf("Detected devices:\n");
@@ -2856,7 +2864,7 @@ int i2c_sensor_get_serial_pte7300(i2c_sensor_t *s, unsigned int *serial)
 static int ezo_open(int address)
 {
   if (!i2c_addr_valid(address)) return EZO_ERROR;
-  return i2c_open(I2C_BUS, address);
+  return i2c_open(_I2C_BUS, address);
 }
 
 static int ezo_close(int fd)
@@ -3003,10 +3011,10 @@ void ezo_i2cdetect()
   // One fd walks every address, so it is opened with addr = -1 (no lock, no
   // I2C_SLAVE) and each probe takes that address's lock itself.  A device that is
   // mid-transaction on another thread is skipped until it is free.
-  int fd = i2c_open(I2C_BUS, -1);
+  int fd = i2c_open(_I2C_BUS, -1);
   if (fd < 0) { perror("open i2c"); return; }
 
-  printf("\nScanning I2C bus %s...\n\n", I2C_BUS);
+  printf("\nScanning I2C bus %s...\n\n", _I2C_BUS);
   printf("     0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f\n");
 
   int detected[128] = {0};
@@ -3067,7 +3075,7 @@ void ezo_i2cdetect()
 
 int ezo_bus_available()
 {
-  int fd = i2c_open(I2C_BUS, -1);   // just proves the bus device opens
+  int fd = i2c_open(_I2C_BUS, -1);   // just proves the bus device opens
   if (fd < 0) return 0;
   i2c_close(fd);
   return 1;
@@ -3603,7 +3611,7 @@ int pump_set_i2c_address(ezo_sensor_t *pump, int new_addr)
  
   if (!i2c_addr_valid(addr) || !i2c_addr_valid(new_addr)) return EZO_SYNTAX_ERR;
   if (new_addr == addr) return EZO_SUCCESS;
-  if (i2c_probe_address(I2C_BUS, new_addr)) return EZO_ERROR;   /* occupied */
+  if (i2c_probe_address(_I2C_BUS, new_addr)) return EZO_ERROR;   /* occupied */
   if (pmp_build(cmd, sizeof(cmd), "I2C,%d", new_addr) < 0) return EZO_SYNTAX_ERR;
  
   int fd = ezo_open(addr);
@@ -4018,7 +4026,7 @@ int ezo_bus_available()
 void ezo_i2cdetect(bool usesyslog)
 {
   DIAG_LOG(usesyslog, "\n");
-  DIAG_LOG(usesyslog, "[DUMMY] Simulated I2C bus scan on %s\n\n", I2C_BUS);
+  DIAG_LOG(usesyslog, "[DUMMY] Simulated I2C bus scan on %s\n\n", _I2C_BUS);
   DIAG_LOG(usesyslog, "     0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f\n");
   DIAG_LOG(usesyslog, "60:              62 63 64       67 68               \n\n");
   DIAG_LOG(usesyslog, "-\n");
@@ -4033,7 +4041,7 @@ void ezo_i2cdetect(bool usesyslog)
 /*
 void ezo_i2cdetect()
 {
-  printf("\n[DUMMY] Simulated I2C bus scan on %s\n\n", I2C_BUS);
+  printf("\n[DUMMY] Simulated I2C bus scan on %s\n\n", _I2C_BUS);
   printf("     0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f\n");
   printf("60:              62 63 64       67 68               \n\n");
   printf("Detected devices:\n");

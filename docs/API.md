@@ -171,8 +171,8 @@ aquachemd/PMP_1/state 2
 aquachemd/PMP_1/timer/state 0                # is a dose currently running
 aquachemd/PMP_1/timer/duration 0             # seconds remaining in the current dose
 aquachemd/PMP_1/timer/default 2              # configured default dose duration
-aquachemd/PMP_1/total_acid_ml 0.00           # running total for the period -- topic name depends on doser type (see below)
-aquachemd/PMP_1/last_dose_ml 0.00            # volume of the most recent single dose
+aquachemd/PMP_1/running_dose_ml 28.00        # running total for the period
+aquachemd/PMP_1/last_dose_ml 2.00            # volume of the most recent single dose
 
 # A dose in progress on a different doser
 aquachemd/PMP_2/timer/duration 597

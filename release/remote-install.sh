@@ -6,7 +6,7 @@ set -o pipefail
 
 # Global Configurations & Ecosystem Constants
 BIN="aquachemd"
-REPO="https://api.github.com/repos/AqualinkD/${BIN}"
+REPO="https://api.github.com/repos/Aquadeamon/${BIN}"
 INSTALLED_BINARY="/usr/local/bin/${BIN}"
 
 # Systemd Journal Message ID (Shared with C code)
@@ -265,12 +265,12 @@ main() {
       cp -rfp ./web $TEMP_INSTALL
       run_install_script "local_Version"
     ;;
-    check|checkupgradable) exit $TRUE ;;
-    development)
-      if ! latest_development_version; then logerr "getting development version"; exit "$FALSE"; fi
-      if ! download_latest_development; then logerr "downloading latest development"; exit "$FALSE"; fi
-      run_install_script "$DEV_VERSION"
-    ;;
+    #check|checkupgradable) exit $TRUE ;;
+    #development)
+    #  if ! latest_development_version; then logerr "getting development version"; exit "$FALSE"; fi
+    #  if ! download_latest_development; then logerr "downloading latest development"; exit "$FALSE"; fi
+    #  run_install_script "$DEV_VERSION"
+    #;;
     clean|delete|remove)
       if ! remove_install; then logerr "Removing install"; exit "$FALSE"; fi
       log "Removed install"

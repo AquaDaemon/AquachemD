@@ -1,19 +1,17 @@
 # AquachemD Release Notes & Changelog
 
-All notable changes to AqualinkD are documented here. Releases are listed in reverse chronological order (newest first).
-
----
-
+All notable changes to AquachemD are documented here. Releases are listed in reverse chronological order (newest first).
+-------------------------------------
 ## Release 1.1.0
-* TODO - Change font in UI for ID's
-* TODO - Change virtual ID's
-* TODO - Fix Log Level in web config (also saving system value and not selected value)
-* TODO - Labels for virtual sensors
-* TOTO - Update HA on reset of running_dose_ml   <- coded not tested.
-
+- WARNING EC Child sensors in HA will get a different ID. Any reporting on TDS / salinity & SC values will need to be modified, Conductivity will stay with the same ID.
 - Added sensor conditions, Set conditions on sensor values (<,>,=,<=,>=)
 - Fixed bug with EC temperature correction readings
 - Normalized many config values
 - Fixed Log and Config downloads.
 - Fix deadlock when only 1 condition `sensor_condition` is present.
 - Added setting to select which sensor ID to use for compensated temperature sensor readings
+- Added running_dose_ml MQTT updates when it's been reset. 
+- Added labels for child sensors.
+- Changed ID's for child sensors.
+- Can set i2c bus in config.
+- Added Release notes to UI. (update dialogue)

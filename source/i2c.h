@@ -56,6 +56,7 @@
 // per-address lock for its duration.  Every address is checked with
 // i2c_addr_valid() first; an invalid one returns I2C_ERROR (0 for the probe).
 
+void i2c_set_bus(const char *bus);
 int i2c_bus_available(const char *bus_path);
 
 // Register-mapped transport

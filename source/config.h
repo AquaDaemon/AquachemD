@@ -48,6 +48,7 @@ struct acdconfig
   bool mqtt_strict_avail;
 
   char *gpio_chip;
+  char *i2c_bus;
   
   bool temp_comp_ph;
   bool temp_comp_ec;

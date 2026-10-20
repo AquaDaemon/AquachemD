@@ -578,8 +578,9 @@
         config: "https://raw.githubusercontent.com/aqualinkd/AqualinkD/refs/heads/master/web/config.json"
     },
     aquachemd: {
-        version: "https://api.github.com/repos/aqualinkd/aquachemd/releases",
-        config: "https://raw.githubusercontent.com/aqualinkd/aquachemd/refs/heads/master/web/config.json"
+        version: "https://api.github.com/repos/AquaDaemon/AquachemD/releases",
+        config: "https://raw.githubusercontent.com/AquaDaemon/AquachemD/refs/heads/master/web/config.json",
+        notes: "https://raw.githubusercontent.com/AquaDaemon/AquachemD/refs/heads/main/RELEASE.md"
     }
 };
 
@@ -1890,7 +1891,12 @@ function startWebsockets() {
       if(_latestVersionAvailable == _currentVersion) {
         dropdown += '<br>latest Release version already installed';
       }
-      dropdown += '<br><input type="button" id="installVersion" onclick="send(this);aqdAlertClose();" value="Install"/>';
+      dropdown += '<div align="right">'
+      dropdown += '<input type="button" id="releaseNotes" onclick="loadReleaseNotes(this);" value="Release Notes"/>';
+      dropdown += '</div><div>'
+      dropdown += '<input type="button" id="installVersion" onclick="send(this);aqdAlertClose();" value="Install"/>';
+      dropdown += '</div>'
+      dropdown += '<textarea id="releasenotes" name="release notes" rows="20" cols="100" placeholder="" style="display: none;"></textarea>'
       dlg_head.innerHTML = dropdown;
       if(showversionwarning) {
         dlg_msg.innerHTML = 'Warning:<p style="font-size: small;">Config files are not always backward compatible when downgrading.<br>' + 'You may need to manually update <b>aqualinkd.conf & config.json</b>.</p>';
@@ -1902,6 +1908,31 @@ function startWebsockets() {
     }
     //alert("loaded");
   }
+
+  async function loadReleaseNotes() {
+    const textarea = document.getElementById('releasenotes');
+
+    if (textarea.style.display !== 'none') {
+      textarea.style.display = 'none';
+    } else {
+      //const url = 'https://raw.githubusercontent.com/AquaDaemon/AquachemD/refs/heads/main/RELEASE.md';
+      try {
+        const response = await fetch(URLS[_name.toLowerCase()]["notes"]);
+      
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+        const textData = await response.text();
+        textarea.value = textData;
+        textarea.style.display = 'block';
+      } catch (error) {
+        textarea.value = 'Error loading release notes.';
+        textarea.style.display = 'block';
+      }
+    }
+  }
+
+
 
   const sleep = ms => new Promise(res => setTimeout(res, ms));
 

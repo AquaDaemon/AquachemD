@@ -565,6 +565,9 @@ reload_configuration:
   }
 
   start_net_services(&acddata);
+  
+  ezo_set_bus(_acdconfig_.i2c_bus);
+  i2c_set_bus(_acdconfig_.i2c_bus);
 
   // Setup any specifics for GPIO / D1W etc
   for (acd_key_t *curr = acddata.keys; curr != NULL; curr = curr->next) {

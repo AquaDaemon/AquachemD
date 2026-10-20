@@ -61,9 +61,7 @@ CFG_ENTRY( "remote_instance_id_suffix",  remote_instance_id_suffix,        NULL,
 
 /* ---  GPIO CONFIGURATION --- */
 CFG_ENTRY( "gpio_chip",              gpio_chip,              "/dev/gpiochip0",     CFG_STRING,  CFG_ADVANCED,                       0,                NULL )
-
-// Need to add the below.  BUT Also need to figure out the best way to set it.
-//CFG_ENTRY( "i2c_bus",                gpio_chip,              "/dev/i2c-1",         CFG_STRING,  CFG_ADVANCED,                       0,                NULL )
+CFG_ENTRY( "i2c_bus",                i2c_bus,                "/dev/i2c-1",         CFG_STRING,  CFG_ADVANCED,                       0,                NULL )
 
 /* --- POLLING & CONVERSION --- */
 CFG_ENTRY( "sensor_poll_time",       sensor_poll_time,       60,                   CFG_INT,     0,                                  0,                NULL )
