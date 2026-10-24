@@ -1,5 +1,5 @@
 
-
+#include "version.h"
 // X-macro config table — one entry per parameter
 
 /**
@@ -28,6 +28,8 @@ CFG_ENTRY( "log_sensor_readings",    log_sensor_readings,    false,             
 /* ---  WEB & DIRECTORIES --- */
 CFG_ENTRY( "web_directory",          web_directory,          "/var/www/aquachemd", CFG_STRING,  CFG_READONLY|CFG_HIDE,      0,     NULL )
 //CFG_ENTRY( "web_config",             web_config,             "",                   CFG_STRING,  CFG_GRP_ADVANCED|CFG_READONLY|CFG_HIDE,      0,     NULL )
+CFG_ENTRY( "mDNS_name",              mdns_name,               AQUACHEMD_SHORT_NAME, CFG_STRING,  CFG_ADVANCED,                 0,                NULL )
+
 
 /* ---  MQTT COMMUNICATION --- */
 CFG_ENTRY( "mqtt_server",            mqtt_server,            NULL,                 CFG_STRING,  CFG_ADVANCED,                  0,                NULL )

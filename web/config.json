@@ -63,7 +63,7 @@
 	"devices":	{
 		"AquachemD":	{
 			"display":	true,
-			"_____enabled_text":	"Enabled"
+			"__enabled_text":	"Enabled"
 		},
 		"PMP_1":	{
 			"display":	true,
@@ -71,9 +71,6 @@
 			"__off_icon":	"hk/barrel-outline.svg"
 		},
 		"PMP_2":	{
-			"display":	true
-		},
-		"PMP_3":	{
 			"display":	true,
 			"__on_icon":	"hk/water-pump.svg",
 			"__off_icon":	"hk/water-pump-off.svg"
@@ -147,6 +144,41 @@
 				}
 			}
 		},
+		"EC_1":	{
+			"display":	true,
+			"uom":	" ",
+			"add_uom2label":	true,
+			"precision":	0,
+			"on_text":	"Sampling",
+			"thresholds":	{
+				"outofrange":	{
+					"min":	3000,
+					"max":	9000
+				},
+				"attention":	{
+					"min":	4000,
+					"max":	8000,
+					"mintext":	"Low",
+					"maxtext":	"High"
+				}
+			}
+		},
+		"EC_1.1":	{
+			"display":	true,
+			"add_uom2label":	true,
+			"on_text":	"Sampling"
+		},
+		"EC_1.2":	{
+			"display":	true,
+			"__add_uom2label":	true,
+			"on_text":	"Sampling"
+		},
+		"EC_1.3":	{
+			"display":	true,
+			"__add_uom2label":	true,
+			"precision":	1,
+			"on_text":	"Sampling"
+		},
 		"CS_1":	{
 			"display":	true
 		},
@@ -158,21 +190,6 @@
 		},
 		"CS_4":	{
 			"display":	true
-		},
-		"TEMP_2":	{
-			"display":	true,
-			"uom":	"&deg;",
-			"precision":	1
-		},
-		"TEMP_3":	{
-			"display":	true,
-			"uom":	"&deg;",
-			"precision":	1
-		},
-		"TEMP_4":	{
-			"display":	true,
-			"uom":	"&deg;",
-			"precision":	1
 		},
 		"TNK_1":	{
 			"display":	true,

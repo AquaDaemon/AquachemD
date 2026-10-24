@@ -369,6 +369,10 @@ void turn_pump_on(struct aquachemdata *acdata, acd_key_t *key, uint32_t duration
       key->dose_stats.running_total_ml >= key->dose_stats.running_total_max_ml) {
     LOG(LOG_WARNING, "%s: dosing limit reached for this period (%.1f / %.1f ml) -- skipping dose until reset",
         key->label, key->dose_stats.running_total_ml, key->dose_stats.running_total_max_ml);
+    if (_acdconfig_.log_zerorun_pump_events) {
+      LOG_PUMP_EVENT(key, 0, 0, 0);
+      post_dosing_event(key, 0, 0);
+    }
     return;
   }
 

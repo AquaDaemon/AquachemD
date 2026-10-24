@@ -32,6 +32,7 @@ struct acdconfig
   unsigned int mg_log_level;
   bool log_sensor_readings;
   char *web_directory;
+  char *mdns_name;
   bool master_off_as_interlock;
 
   char *mqtt_aquachemd_topic;

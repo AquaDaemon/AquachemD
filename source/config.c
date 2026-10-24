@@ -203,7 +203,7 @@ void action_staging() {
             add_sensor_i2c(&_staging);
             break;
         default:
-            LOG(LOG_ERR, "Didn't create config entry for %s", _staging.label);
+            LOG(LOG_ERR, "Didn't create config entry for '%s', didn't understand type.", _staging.label);
             break;
     }
     
@@ -295,7 +295,7 @@ bool setConfigValue(struct aquachemdata *acdata, char *param, char *value) {
 
                 // Dynamic Linked List Staging Parser
                 //if (strstr(param, "_label") != NULL) {
-                if (KEY_ENDS_WITH_IC(param, "_label")) { // Should use this in future.
+                if (KEY_ENDS_WITH_IC(param, "_label")) { 
                     action_staging();
                     clear_staging();
                     LOG(LOG_DEBUG,"Start new device %s\n",value);
@@ -310,21 +310,22 @@ bool setConfigValue(struct aquachemdata *acdata, char *param, char *value) {
                     else if (STARTS_WITH_IC(param, "gpio_output")) _staging.pending_type = ACD_TYPE_GPIO_OUTPUT;
                     else if (STARTS_WITH_IC(param, "gpio_pulse")) _staging.pending_type = ACD_TYPE_GPIO_PULSE;
                     else if (STARTS_WITH_IC(param, "sensor_condition")) _staging.pending_type = ACD_TYPE_SENSOR_COND;
-                    //else if (STARTS_WITH_IC(param, "ezo_doser")) {_staging.pending_type = ACD_TYPE_EZO_PMP; _staging.address = EZO_PMP_ADDR;}
+                    else if (STARTS_WITH_IC(param, "ezo_doser")) {_staging.pending_type = ACD_TYPE_EZO_PMP; _staging.address = EZO_PMP_ADDR;}
                 }
-                else if (strstr(param, "_type")) {
+                //else if (strstr(param, "_type")) {
+                else if (KEY_ENDS_WITH_IC(param, "_type")) { 
                     if (strcasecmp(value, "ezo") == 0) {
                         if (STARTS_WITH_IC(param, "ph_sensor"))       {_staging.pending_type = ACD_TYPE_EZO_PH;   _staging.address = EZO_PH_ADDR;}
                         else if (STARTS_WITH_IC(param, "orp_sensor")) {_staging.pending_type = ACD_TYPE_EZO_ORP;  _staging.address = EZO_ORP_ADDR;}
                         else if (STARTS_WITH_IC(param, "temp_sensor")){_staging.pending_type = ACD_TYPE_EZO_TEMP; _staging.address = EZO_RTD_ADDR;}
                         else if (STARTS_WITH_IC(param, "prs_sensor")) {_staging.pending_type = ACD_TYPE_EZO_PRS;  _staging.address = EZO_PRS_ADDR;}
-                        else if (STARTS_WITH_IC(param, "ec_sensor"))  {_staging.pending_type = ACD_TYPE_EZO_EC; _staging.address = EZO_EC_ADDR;}   
-                    }
+                        else if (STARTS_WITH_IC(param, "ec_sensor"))  {_staging.pending_type = ACD_TYPE_EZO_EC;   _staging.address = EZO_EC_ADDR;}
+                    }   
                     else if (STARTS_WITH_IC(param, "ezo_doser_type")) {
-                            _staging.pending_type = ACD_TYPE_EZO_PMP;
-                            _staging.address = EZO_PMP_ADDR;
-                            setMASK(_staging.flags, parse_pump_type(value));
+                        _staging.pending_type = ACD_TYPE_EZO_PMP;
+                        setMASK(_staging.flags, parse_pump_type(value));
                     }
+                    
                     else if (strcasecmp(value, "d1w") == 0) _staging.pending_type = ACD_TYPE_D1W_TEMP;
                     else if (strcasecmp(value, "mqtt") == 0) _staging.pending_type = ACD_TYPE_MQTT_TEMP;
                     //else if (strcasecmp(value, "input") == 0) _staging.pending_type = ACD_TYPE_GPIO_INPUT;
@@ -358,7 +359,8 @@ bool setConfigValue(struct aquachemdata *acdata, char *param, char *value) {
                      if (_staging.topic_path) free(_staging.topic_path);
                     _staging.topic_path = strdup(value);
                 }
-                else if (strstr(param, "_address")) {
+                //else if (strstr(param, "_address")) {
+                else if (KEY_ENDS_WITH_IC(param, "_address")) {
                     _staging.address = (unsigned char)strtoul(value, NULL, 16);
                 }
                 else if (strncasecmp(param, "temp_sensor_path", 16) == 0) {
@@ -2324,6 +2326,14 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
     df_arr = cJSON_AddArrayToObject(drv, "fields");
 
     df_item = cJSON_CreateObject();
+    cJSON_AddStringToObject(df_item, "key", "ph_sensor_address");
+    cJSON_AddStringToObject(df_item, "type", "text");
+    cJSON_AddBoolToObject(df_item, "readonly", false);
+    snprintf(tmp_buf, sizeof(tmp_buf), "0x%02x", EZO_PH_ADDR);  
+    cJSON_AddStringToObject(df_item, "value", tmp_buf);
+    cJSON_AddItemToArray(df_arr, df_item);
+
+    df_item = cJSON_CreateObject();
     cJSON_AddStringToObject(df_item, "key", "ph_sensor_interlock_scope");
     cJSON_AddStringToObject(df_item, "type", "select");
     cJSON_AddBoolToObject(df_item, "readonly", false);
@@ -2346,6 +2356,14 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
     cJSON_AddStringToObject(drv, "driver_type", "ezo");
     cJSON_AddStringToObject(drv, "default_label", "New EZO ORP sensor");
     df_arr = cJSON_AddArrayToObject(drv, "fields");
+
+    df_item = cJSON_CreateObject();
+    cJSON_AddStringToObject(df_item, "key", "orp_sensor_address");
+    cJSON_AddStringToObject(df_item, "type", "text");
+    cJSON_AddBoolToObject(df_item, "readonly", false);
+    snprintf(tmp_buf, sizeof(tmp_buf), "0x%02x", EZO_ORP_ADDR);  
+    cJSON_AddStringToObject(df_item, "value", tmp_buf);
+    cJSON_AddItemToArray(df_arr, df_item);
 
     df_item = cJSON_CreateObject();
     cJSON_AddStringToObject(df_item, "key", "orp_sensor_interlock_scope");
@@ -2371,6 +2389,14 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
     df_arr = cJSON_AddArrayToObject(drv, "fields");
 
     df_item = cJSON_CreateObject();
+    cJSON_AddStringToObject(df_item, "key", "temp_sensor_address");
+    cJSON_AddStringToObject(df_item, "type", "text");
+    cJSON_AddBoolToObject(df_item, "readonly", false);
+    snprintf(tmp_buf, sizeof(tmp_buf), "0x%02x", EZO_RTD_ADDR);  
+    cJSON_AddStringToObject(df_item, "value", tmp_buf);
+    cJSON_AddItemToArray(df_arr, df_item);
+
+    df_item = cJSON_CreateObject();
     cJSON_AddStringToObject(df_item, "key", "temp_sensor_interlock_scope");
     cJSON_AddStringToObject(df_item, "type", "select");
     cJSON_AddBoolToObject(df_item, "readonly", false);
@@ -2394,6 +2420,14 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
     df_arr = cJSON_AddArrayToObject(drv, "fields");
 
     df_item = cJSON_CreateObject();
+    cJSON_AddStringToObject(df_item, "key", "prs_sensor_address");
+    cJSON_AddStringToObject(df_item, "type", "text");
+    cJSON_AddBoolToObject(df_item, "readonly", false);
+    snprintf(tmp_buf, sizeof(tmp_buf), "0x%02x", EZO_PRS_ADDR);  
+    cJSON_AddStringToObject(df_item, "value", tmp_buf);
+    cJSON_AddItemToArray(df_arr, df_item);
+
+    df_item = cJSON_CreateObject();
     cJSON_AddStringToObject(df_item, "key", "prs_sensor_interlock_scope");
     cJSON_AddStringToObject(df_item, "type", "select");
     cJSON_AddBoolToObject(df_item, "readonly", false);
@@ -2415,7 +2449,7 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
     cJSON_AddStringToObject(drv, "driver_type", "ezo");
     cJSON_AddStringToObject(drv, "default_label", "New EZO Conductivity sensor");
     df_arr = cJSON_AddArrayToObject(drv, "fields");
-/*
+
     df_item = cJSON_CreateObject();
     cJSON_AddStringToObject(df_item, "key", "ec_sensor_address");
     cJSON_AddStringToObject(df_item, "type", "text");
@@ -2423,7 +2457,7 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
     snprintf(tmp_buf, sizeof(tmp_buf), "0x%02x", EZO_EC_ADDR);  
     cJSON_AddStringToObject(df_item, "value", tmp_buf);
     cJSON_AddItemToArray(df_arr, df_item);
-*/
+
     df_item = cJSON_CreateObject();
     cJSON_AddStringToObject(df_item, "key", "ec_sensor_k");
     cJSON_AddStringToObject(df_item, "type", "number");
@@ -2521,7 +2555,7 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
     df_item = cJSON_CreateObject();
     cJSON_AddStringToObject(df_item, "key", "ezo_doser_type");
     cJSON_AddStringToObject(df_item, "type", "select");
-    cJSON_AddStringToObject(df_item, "value", "ezo");
+    cJSON_AddStringToObject(df_item, "value", "pH");
     cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_PMP_TYPE));
     cJSON_AddItemToArray(df_arr, df_item);
 

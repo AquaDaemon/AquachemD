@@ -544,6 +544,21 @@
     pointer-events: none; /* Allows clicks to pass through to buttons below */
   }
 
+  #releasenotes {
+    max-width: 700px;
+    max-height: 400px;
+    overflow-y: auto;
+    padding: 0 12px;
+    /*border: 1px solid #ccc;*/
+    text-align: left;
+    font-size: 14px;
+    background-color: rgb(211, 211, 211, 0.1); /* grey with 40% opacity */
+  }
+  #releasenotes h2 { margin: 12px 0 6px; font-size: 1.3em; text-align: center}
+  #releasenotes h3 { margin: 12px 0 4px; font-size: 1.1em; }
+  #releasenotes ul { margin: 4px 0; padding-left: 20px; }
+  
+
   </style>
   <script type='text/javascript'>
   //'use strict';
@@ -1026,7 +1041,10 @@
         dlg_msg.innerHTML = "Error "+data?.error+"<br>"+data?.error_msg;
       } else {
         dlg_msg.innerHTML = "Sucess";
-        dlg_msg.innerHTML += "<br>Current reading = "+data?.value;
+        if (data?.reading_value)
+          dlg_msg.innerHTML += "<br>Current reading = "+data?.reading_value;
+        if (data?.calibration_points)
+          dlg_msg.innerHTML += "<br>Calibration points = "+data?.calibration_points;
       }
       return;
 
@@ -1039,7 +1057,7 @@
       switch(data.request_type) {
         case "cal_ph":
           val = document.getElementById("cal_ph_val")?.value;
-          text = "pH to "+ val;
+          text = "pH "+data?.action_point.toUpperCase()+" to "+ val;
           uom = "";
           break;
         case "cal_orp":
@@ -1059,21 +1077,17 @@
           break;
         case "cal_ec":
           val = Number(document.getElementById("cal_ec_val")?.value);
-          if ( val === 0 ) {
-            text = "Conductivity dry sensor";
-          } else {
-            text = "Conductivity to "+ val +"µS";
-          }
+          text = "Conductivity "+data?.action_point.toUpperCase()+" to "+ val;
           uom = "µS";
           break;
         default :
           text = "Unknown";
           break;
       }
-      dlg_msg.innerHTML = "Current Reading "+data.value+uom;
+      dlg_msg.innerHTML = "Current Reading "+data.reading_value+uom;
       dlg_msg.innerHTML += '<hr>';
       dlg_msg.innerHTML += '<br><input type="button" id="calibrate_probe" data-type='+data.request_type+' data-value='+val+' onclick="send(this);this.remove();" value="Calibrate '+text+'"/>';
-      dlg_msg.innerHTML += '<br><br>This will re-calibrate your probe resettings all previous calibrations' 
+      dlg_msg.innerHTML += '<br><br>This will calibrate your probe to the above setings' 
       
       return;
     }
@@ -1081,10 +1095,29 @@
     // This is 1st call, so request an instant reading.
     aqdAlert("Calibrate "+context.id);
 
+    switch(context.id) {
+        case "cal_ph":
+          val = document.getElementById("cal_ph_val")?.value;
+          break;
+        case "cal_orp":
+          val = document.getElementById("cal_orp_val")?.value;
+          break;
+        case "cal_rtd":
+          val = document.getElementById("cal_rtd_val")?.value;
+          break;
+        case "cal_prs":
+          val = document.getElementById("cal_prs_val")?.value;
+          break;
+        case "cal_ec":
+          val = document.getElementById("cal_ec_val")?.value;
+          break;
+    }
+
     let mockSource = {
       id: "instantreading",
       dataset: {
-        type: context.id
+        type: context.id,
+        value: val
       }
     };
     send(mockSource);
@@ -1092,45 +1125,6 @@
     dlg_msg = document.getElementById("alertDialogMessage");
 
     dlg_msg.innerHTML = "Taking Instant reading";
-
-/*
-    switch(context.id) {
-      case "cal_ph_low":
-        text = "pH Low (4.0)";
-        break;
-      case "cal_ph_med":
-        text = "pH Medium (7.0)";
-        break;
-      case "cal_ph_high":
-        text = "pH High (10.0)";
-        break;
-      case "cal_orp":
-        text = "ORP";
-        break;
-      case "cal_rtd":
-        val = document.getElementById("cal_rtd_val")?.value;
-        text = "Temperature ( "+ val +"&deg;C )";
-      case "cal_prs":
-        val = document.getElementById("cal_prs_val")?.value;
-        text = "Pressure ( "+ val +"psi )";
-        break;
-
-    }
-
-   
-
-    let dlg_msg = document.getElementById("alertDialogMessage");
-
-// instantreading
-
-    const button=
-    dlg_msg.innerHTML = text
-    dlg_msg.innerHTML += '<br><br><input type="button" id="calibrate_probe" data-type='+context.id+' data-value='+val+' onclick="send(this);aqdAlertClose();" value="Calibrate"/>';
-
-    //dlg_msg.innerHTML += '<br><br><input type="button" id="calibrate_probe" data-type='+context.id+' data-value='+val+' onclick="send(this);aqdAlertClose();" value="Calibrate"/>';
-
-    dlg_msg.innerHTML += '<br><br>This will re-calibrate your probe resettings all previous calibrations' 
-    */
   }
 
 
@@ -1839,6 +1833,7 @@ function startWebsockets() {
         // dataset below is a result of using data-type= in the HTML button.  Daft I know, but that's JS!
         cmd.uri = "instantreading/"+source.dataset.type;
         cmd.text_value = source.dataset.type;
+        cmd.value = source.dataset.value;
         break;
       case "calibrate_probe":
         // dataset below is a result of using data-type= in the HTML button.  Daft I know, but that's JS!
@@ -1896,7 +1891,8 @@ function startWebsockets() {
       dropdown += '</div><div>'
       dropdown += '<input type="button" id="installVersion" onclick="send(this);aqdAlertClose();" value="Install"/>';
       dropdown += '</div>'
-      dropdown += '<textarea id="releasenotes" name="release notes" rows="20" cols="100" placeholder="" style="display: none;"></textarea>'
+      //dropdown += '<textarea id="releasenotes" name="release notes" rows="20" cols="100" placeholder="" style="display: none;"></textarea>'
+      dropdown += '<div id="releasenotes" style="display:none;"></div>'
       dlg_head.innerHTML = dropdown;
       if(showversionwarning) {
         dlg_msg.innerHTML = 'Warning:<p style="font-size: small;">Config files are not always backward compatible when downgrading.<br>' + 'You may need to manually update <b>aqualinkd.conf & config.json</b>.</p>';
@@ -1909,6 +1905,64 @@ function startWebsockets() {
     //alert("loaded");
   }
 
+  function renderReleaseNotes(md) {
+     md = md.replace(/<!--[\s\S]*?-->/g, '');   // remove comments (single or multi-line)
+    const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const out = [];
+      let inList = false;
+
+      const closeList = () => {
+        if (inList) { out.push('</ul>'); inList = false; }
+      };
+
+      for (const raw of md.split(/\r?\n/)) {
+        const line = raw.trim();
+
+        if (line === '') {                       // blank line
+          closeList();
+        } else if (/^-{2,}$/.test(line)) {       // -- or --- => horizontal rule
+          closeList();
+          out.push('<hr>');
+        } else if (/^##\s+/.test(line)) {        // ## heading
+          closeList();
+          out.push(`<h3>${esc(line.replace(/^##\s+/, ''))}</h3>`);
+        } else if (/^#\s+/.test(line)) {         // # title
+          closeList();
+          out.push(`<h2>${esc(line.replace(/^#\s+/, ''))}</h2>`);
+        } else if (/^-\s+/.test(line)) {         // - bullet
+          if (!inList) { out.push('<ul>'); inList = true; }
+          out.push(`<li>${esc(line.replace(/^-\s+/, ''))}</li>`);
+        } else {                                 // anything else => paragraph
+          closeList();
+          out.push(`<p>${esc(line)}</p>`);
+        }
+      }
+      closeList();
+      return out.join('\n');
+    }
+
+    async function loadReleaseNotes() {
+      const notes = document.getElementById('releasenotes');
+
+      if (notes.style.display !== 'none') {
+        notes.style.display = 'none';
+        return;
+      }
+
+      try {
+        const response = await fetch(URLS[_name.toLowerCase()]["notes"]);
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+        const textData = await response.text();
+        notes.innerHTML = renderReleaseNotes(textData);
+      } catch (error) {
+        notes.textContent = 'Error loading release notes.';
+      }
+      notes.style.display = 'block';
+    }
+
+/*
   async function loadReleaseNotes() {
     const textarea = document.getElementById('releasenotes');
 
@@ -1931,7 +1985,7 @@ function startWebsockets() {
       }
     }
   }
-
+*/
 
 
   const sleep = ms => new Promise(res => setTimeout(res, ms));

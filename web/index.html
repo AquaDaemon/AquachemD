@@ -1266,10 +1266,20 @@
         case _DeviceTypes.SENSOR:
         case _DeviceTypes.AVERAGE:
         case _DeviceTypes.LEVEL_SENSOR:
-          add_tile(object.id, object.label, object.status, object.type, object.attributes);
-          if (object.uom !== undefined) setTileUOM(object.id, object.uom);
-          else if (_config.devices[object.id]?.uom) setTileUOM(object.id, _config.devices[object.id].uom);
+          if (_config.devices[object.id]?.add_uom2label === true) {
+            add_tile(object.id, object.label, object.status, object.type, object.attributes);
+            document.getElementById(object.id + '_name').innerHTML = object.label + " ("+formatUOM(object.uom)+")";
+            //add_tile(object.id, object.label + " "+formatUOM(object.uom), object.status, object.type, object.attributes);
+            setTileUOM(object.id, " ");
+          } else {
+            add_tile(object.id, object.label, object.status, object.type, object.attributes);
+            // Let web config overide any UOM from devices.
+            if (_config.devices[object.id]?.uom) setTileUOM(object.id, _config.devices[object.id].uom);
+            else if (object.uom !== undefined) setTileUOM(object.id, object.uom);
+            //else if (_config.devices[object.id]?.uom) setTileUOM(object.id, _config.devices[object.id].uom);
+          }
           break;
+
         case _DeviceTypes.CONTROLLER:
           add_tile(object.id, object.label, object.status, object.type, object.attributes);
           document.getElementById(object.id).setAttribute('setpoint', object.spvalue);

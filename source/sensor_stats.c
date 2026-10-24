@@ -14,10 +14,11 @@
 #include "aquachemd.h"
 #include "utils.h"
 
-
+/*
 #ifdef DUMMY_SENSORS
   static void dummy_pulse_advance(acd_key_t *key, uint64_t now_ns);
 #endif
+*/
 
 void _update_sensor_average(sensor_stats_t *stats, float new_value/*, float tau_seconds*/);
 
@@ -549,7 +550,7 @@ float calculate_pulse_value(acd_key_t *key)
 }
 
 
-
+/*
 #ifdef DUMMY_SENSORS
 // Stand-in for the gpio_monitor thread. Adds the pulses a real sensor would have
 // produced since the last poll, at a rate chosen to give a plausible reading in the
@@ -573,68 +574,4 @@ static void dummy_pulse_advance(acd_key_t *key, uint64_t now_ns)
   __atomic_fetch_add(&f->pulses, add, __ATOMIC_RELAXED);
 }
 #endif // DUMMY_SENSORS
-
-/*
-float calculate_flow_rate(acd_key_t *key)
-{
-  if (!key || key->type != ACD_TYPE_GPIO_FLOW) return -1.0f;
-
-  gpio_flow_t *f = &key->data.flow;
-
-  if (f->k_factor <= 0.0f) {
-    LOG(LOG_ERR, "%s: k_factor not set (%.3f), cannot calculate flow\n", key->label, f->k_factor);
-    return -1.0f;
-  }
-
-  uint64_t now_ns = mono_now_ns();
-  if (now_ns == 0) return -1.0f;
-
-  uint64_t count = __atomic_load_n(&f->pulses, __ATOMIC_RELAXED);
-
-  // First call just establishes the baseline
-  if (f->last_ns == 0) {
-    f->last_pulses = count;
-    f->last_ns     = now_ns;
-    return -1.0f;
-  }
-
-  uint64_t dt_ns = now_ns - f->last_ns;
-  if (dt_ns == 0) return -1.0f;
-
-  float hz  = (float)(count - f->last_pulses) * 1e9f / (float)dt_ns;
-  float lpm = hz / f->k_factor;                 // k_factor is Hz per (L/min)
-
-  f->last_pulses = count;
-  f->last_ns     = now_ns;
-
-  // Convert from litres/min (native) to the configured unit
-  if (key->uom == UOM_GALLONS_PER_MIN)          // whatever you name it in uom.h
-    lpm *= (ML_PER_LITER / ML_PER_GALLON);
-
-  return lpm;
-}
-*/
-
-/*
-bool IS_RUNNING_DOSE_ENABLED(acd_key_t *key)
-{
-  if (!isMASKSET(key->flags, PH_PUMP) && 
-      !isMASKSET(key->flags, ORP_PUMP) && 
-      !isMASKSET(key->flags, H2O_PUMP)) {
-        return false;
-  }
-
-  if (!key || key->dose_stats.running_total_max_ml <= 0) {
-    return false;
-  }
-  return true;
-}
-
-bool IS_TANK_EMPTY_LOCKOUT_ENABLED(acd_key_t *key)
-{
-  if (!key || key->type != ACD_TYPE_TANK || key->data.tank.total_volume <= 0 || key->data.tank.min_volume <= 0 || !isMASKSET(key->flags, ACD_FLAG_VIRTUAL)) {
-    return false;
-  }
-  return true;
-}
 */

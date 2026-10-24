@@ -55,6 +55,16 @@
 #define PH_REF_MID  7.00f
 #define PH_REF_HIGH 10.00f
 
+#define EC_K01_REF_LOW  84
+#define EC_K01_REF_HIGH 1413
+
+#define EC_K1_REF_LOW  12880
+#define EC_K1_REF_HIGH 80000
+
+#define EC_K10_REF_LOW   12880
+#define EC_K10_REF_HIGH 150000
+
+
 // ─── Enums ────────────────────────────────────────────────────────────────────
 
 // Calibration point options for pH
@@ -63,6 +73,13 @@ typedef enum {
   PH_CAL_MID  = 1,   // typically pH 7.00
   PH_CAL_HIGH = 2    // typically pH 10.00
 } ph_cal_point_t;
+
+// Calibration point options for EC
+typedef enum {
+  EC_CAL_LOW  = 0,   // typically pH 12880
+  EC_CAL_HIGH = 1,    // typically pH 80000
+  EC_CAL_DRY  = 2
+} ec_cal_point_t;
 
 // Temperature scale for RTD sensor
 typedef enum {
@@ -76,6 +93,7 @@ typedef enum {
   PUMP_FORWARD = 0,
   PUMP_REVERSE = 1
 } pump_dir_t;
+
 
 // ─── Structs ──────────────────────────────────────────────────────────────────
 
@@ -245,10 +263,12 @@ int ec_get_k(ezo_sensor_t *ec, float *k);
 int ec_set_tds_factor(ezo_sensor_t *ec, float factor);
 int ec_get_tds_factor(ezo_sensor_t *ec, float *factor);
 // Calibration
+int ec_calibrate_by_value(ezo_sensor_t *ec, uint calibrationValue);
 int ec_calibrate_dry(ezo_sensor_t *ec);
-int ec_calibrate(ezo_sensor_t *ec, float conductivity);
-int ec_calibrate_low(ezo_sensor_t *ec, float conductivity);
-int ec_calibrate_high(ezo_sensor_t *ec, float conductivity);
+int ec_calibrate(ezo_sensor_t *ec, uint conductivity);
+int ec_calibrate_by_value(ezo_sensor_t *ec, uint conductivity);
+int ec_calibrate_low(ezo_sensor_t *ec, uint conductivity);
+int ec_calibrate_high(ezo_sensor_t *ec, uint conductivity);
 int ec_get_cal_status(ezo_sensor_t *ec,ezo_cal_status_t *cal);
 int ec_clear_calibration(ezo_sensor_t *ec);
 // Device information
@@ -293,6 +313,82 @@ int pump_set_i2c_address(ezo_sensor_t *pump, int new_addr);                  /* 
 int pump_get_info(ezo_sensor_t *pump, char *info, int len);                  /* i               */
 int pump_get_device_status(ezo_sensor_t *pump, char *status, int len);       /* Status          */
 int pump_sleep(ezo_sensor_t *pump);                                          /* Sleep           */
+
+
+// ─── Calibration export / import (every EZO circuit that has Export/Import) ───
+// The circuit hands its calibration out as a short list of text strings
+// ("Export,?" says how many, then one "Export" per string, then "*DONE") and takes
+// them back the same way ("Import,<string>" for each, in the same order).  The
+// strings are opaque: copy them, never interpret them.  pH needs firmware >= 2.10.
+//
+// ezo_cal_data_t holds them one per line, each terminated by '\n':
+//     data   = "STRING1\nSTRING2\n...\0"      length = bytes used (without the final \0)
+//     chunks = number of strings
+#ifndef EZO_CAL_MAX_LEN
+#define EZO_CAL_MAX_LEN    2048
+#endif
+#define EZO_CAL_MAX_CHUNKS 64    // sanity limit; the datasheet example is 10 strings
+#define EZO_CAL_CHUNK_MAX  40    // longest single string accepted; datasheet says 12
+
+typedef struct {
+  char   data[EZO_CAL_MAX_LEN];
+  size_t length;
+  int    chunks;
+} ezo_cal_data_t;
+
+/**
+ * Download (export) the calibration dataset from an EZO circuit.
+ * Holds the bus lock for the whole transfer (the circuit's export list is a FIFO).
+ * Takes about (chunks + 2) x 300 ms.
+ * Returns EZO_SUCCESS; otherwise the circuit's own status code (EZO_SYNTAX_ERR if it has
+ * no Export, 255 if it says "no data", ...) or EZO_ERROR for bus failures, a list shorter
+ * or longer than reported, or data that does not fit.  *cal_out is zeroed on failure.
+ * Every failure is logged with the command that failed; set EZO_CAL_TRACE=1 in the
+ * environment to print every command and reply on stderr.
+ */
+int ezo_download_calibration(ezo_sensor_t *sensor, ezo_cal_data_t *cal_out);
+
+/**
+ * Upload (import) a calibration dataset to an EZO circuit.
+ * The dataset is fully validated BEFORE the circuit is touched.  The circuit may reboot
+ * after the last string; this waits (up to ~10 s) for it to answer again.
+ * Returns EZO_SUCCESS, or the circuit's status code / EZO_ERROR.  If it fails part way
+ * the circuit can hold a half-imported calibration: repeat the whole upload.
+ */
+int ezo_upload_calibration(ezo_sensor_t *sensor, const ezo_cal_data_t *cal_in);
+
+
+
+// Fast, type-safe inline equivalent for pH
+static inline ph_cal_point_t ph_get_calibration_point(float calibrationValue) {
+    float low_mid_boundary  = (PH_REF_LOW + PH_REF_MID) / 2.0f;
+    float mid_high_boundary = (PH_REF_MID + PH_REF_HIGH) / 2.0f;
+
+    if (calibrationValue < low_mid_boundary) {
+        return PH_CAL_LOW;
+    } else if (calibrationValue <= mid_high_boundary) {
+        return PH_CAL_MID;
+    } else {
+        return PH_CAL_HIGH;
+    }
+}
+
+// Fast, type-safe inline equivalent for EC
+static inline ec_cal_point_t ec_get_calibration_point(unsigned int calibrationValue) {
+    if (calibrationValue == 0) {
+        return EC_CAL_DRY;
+    } else if (calibrationValue == EC_K01_REF_LOW || 
+               calibrationValue == EC_K1_REF_LOW  || 
+               calibrationValue == EC_K10_REF_LOW) {
+        return EC_CAL_LOW;
+    } else if (calibrationValue == EC_K01_REF_HIGH || 
+               calibrationValue == EC_K1_REF_HIGH || 
+               calibrationValue == EC_K10_REF_HIGH) {
+        return EC_CAL_HIGH;
+    } else {
+        return EZO_ERROR; // Ensure EZO_ERROR is part of your enum or compatible
+    }
+}
 
 #endif
 

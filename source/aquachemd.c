@@ -60,6 +60,7 @@ Usage:
 #include "gpio_monitor.h"
 #include "state_manager.h"
 #include "sensor_stats.h"
+#include "ezo_calibrate.h"
 
 #ifdef USE_SYSTEMD
 #include <systemd/sd-daemon.h>
@@ -265,51 +266,6 @@ double elapsed_ms(const struct timespec *start_time) {
 
     return (delta_sec * 1000.0) + (delta_nsec / 1000000.0);
 }
-/*
-ezo_pump_request(acd_key_t *key, acd_state_t state)
-{
-  if (state == ACD_LED_ON)
-    setMASK(key->flags, EZO_PUMP_REQUEST_ON);
-  else
-    setMASK(key->flags, EZO_PUMP_REQUEST_OFF);
-
-  aquachemd_force_sensor_poll();
-}
-*/
-/*
-check_ezo_pump_requests_status(struct aquachemdata *acdata, acd_key_t *key)
-{
-  if (key->state == ACD_LED_ON) {
-    if ( isMASKSET(key->flags, EZO_PUMP_REQUEST_OFF)) {
-
-    } else {
-    pump_status_t pump_reading = pump_get_status();
-    if (pump_reading.status == EZO_SUCCESS) {
-      if (!pump_reading.is_pumping) {
-        // Pump is off, set off
-        // NSF NEED TO LOG THE PUMP RUN.
-        float dose_ml = pump_get_dispensed_volume();
-        set_key_state(acdata, key, ACD_LED_ENABLED);
-      }
-    }
-    } else {
-      LOG(LOG_WARNING, "EZO Pump '%s' read failed (status %d)\n", curr->label, pump_reading.status);
-      //update_display_message(&acddata, ACD_MSG_SENSOR_READ_FAILED, curr->label);
-      sensor_read_error(acdata, key);
-    }
-  } else if ( isMASKSET(key->flags, EZO_PUMP_REQUEST_ON)) {
-    // Turn on dose.  
-    if (pump_dose_volume_at_rate(key->requested_dose, key->dose_stats.flow_rate) == EZO_SUCCESS) {
-      removeMASK(key->flags, EZO_PUMP_REQUEST_ON);
-      set_key_state(acdata, key, ACD_LED_ON);
-    } else {
-      // ERROR
-      LOG(LOG_ERR, "EZO Pump '%s' failed to turn on");
-      sensor_read_error(acdata, key);
-    }
-  }
-}
-*/
 
 
 void printHelp()
@@ -329,6 +285,8 @@ void printHelp()
   printf("\tcalibrate orp <mv_value>\n");
   printf("\tcalibrate rtd <°C_value>\n");
   printf("\tcalibrate prs <psi_value>\n");
+  printf("\tcalibrate ec  <uS value>\n");
+  printf("\tcalibrate ec  clear\n");
 }
 
 
@@ -342,7 +300,7 @@ void scan_sensors(bool activeSystem, bool deepScan)
   gpio_detect(deepScan, activeSystem);
 #endif
   
-DIAG_LOG(activeSystem, "==============================================================\n");
+  DIAG_LOG(activeSystem, "==============================================================\n");
   w1_detect(activeSystem);
   
   DIAG_LOG(activeSystem, "==============================================================\n");
@@ -406,78 +364,32 @@ int main(int argc, char *argv[])
   // ── Calibration mode ────────────────────────────────────────────────────────
   if (argc >= 2 && strcasecmp(argv[1], "calibrate") == 0)
   {
-    int idx=2;
-    if (argc < 3)
+    ezo_calibrate_t args = {0};
+
+    if (!ezo_calibrate_parse_args(argc, argv, &args)) 
     {
       fprintf(stderr, "Usage: %s calibrate ph  <low|mid|high>\n", argv[0]);
-      fprintf(stderr, "       %s calibrate orp <mv_value>\n", argv[0]);
-      fprintf(stderr, "       %s calibrate rtd <°C_value>\n", argv[0]);
-      fprintf(stderr, "       %s calibrate prs <psi_value>\n", argv[0]);
+      fprintf(stderr, "       %s calibrate orp <mv value>\n", argv[0]);
+      fprintf(stderr, "       %s calibrate rtd <°C value>\n", argv[0]);
+      fprintf(stderr, "       %s calibrate prs <psi value>\n", argv[0]);
+      fprintf(stderr, "       %s calibrate ec  <dry|low|high> <µS value>\n", argv[0]);
+      fprintf(stderr, "       %s calibrate <ph|orp|rtd|ec|pmp> clear\n", argv[0]);
+      fprintf(stderr, "       %s calibrate <ph|orp|rtd|ec|pmp> read\n", argv[0]);
+      fprintf(stderr, "       %s calibrate <ph|orp|rtd|ec|pmp> status\n", argv[0]);
+      fprintf(stderr, "       %s calibrate <ph|orp|rtd|ec|pmp> export <filename>\n", argv[0]);
+      fprintf(stderr, "       %s calibrate <ph|orp|rtd|ec|pmp> import <filename>\n", argv[0]);
+      fprintf(stderr, "       %s calibrate pmp dose\n", argv[0]);
+      fprintf(stderr, "       %s calibrate pmp <ml volume>\n", argv[0]);
+      
       return 1;
     }
 
-    if (strcasecmp(argv[idx], "ph") == 0) {idx=3;}
-
-    if (strcasecmp(argv[idx], "mid") == 0)
-    {
-      printf("Calibrating pH mid-point (7.00)...\n");
-      //return ph_calibrate_mid() == EZO_SUCCESS ? 0 : 1;
-      return ph_calibrate_mid(&(ezo_sensor_t){ .address = EZO_PH_ADDR }) == EZO_SUCCESS ? 0 : 1;
-    }
-    else if (strcasecmp(argv[idx], "low") == 0)
-    {
-      printf("Calibrating pH low-point (4.00)...\n");
-      //return ph_calibrate_low() == EZO_SUCCESS ? 0 : 1;
-      return ph_calibrate_low(&(ezo_sensor_t){ .address = EZO_PH_ADDR }) == EZO_SUCCESS ? 0 : 1;
-    }
-    else if (strcasecmp(argv[idx], "high") == 0)
-    {
-      printf("Calibrating pH high-point (10.00)...\n");
-      //return ph_calibrate_high() == EZO_SUCCESS ? 0 : 1;
-      return ph_calibrate_high(&(ezo_sensor_t){ .address = EZO_PH_ADDR }) == EZO_SUCCESS ? 0 : 1;
-    }
-    else if (strcasecmp(argv[2], "orp") == 0)
-    {
-      if (argc < 4)
-      {
-        fprintf(stderr, "Usage: %s calibrate orp <mv_value>\n", argv[0]);
-        return 1;
-      }
-      float mv = atof(argv[3]);
-      printf("Calibrating ORP at %.2f mV...\n", mv);
-      //return orp_calibrate(mv) == EZO_SUCCESS ? 0 : 1;
-      return orp_calibrate(&(ezo_sensor_t){ .address = EZO_ORP_ADDR }, mv) == EZO_SUCCESS ? 0 : 1;
-    }
-    else if ( (strcasecmp(argv[2], "rtd") == 0) ||
-              (strcasecmp(argv[2], "temp") == 0))
-    {
-      if (argc < 4)
-      {
-        fprintf(stderr, "Usage: %s calibrate rtd <degC>\n", argv[0]);
-        return 1;
-      }
-      float temp = atof(argv[3]);
-      printf("Calibrating RTD / Temperature probe at %.2f°C...\n", temp);
-      //return rtd_calibrate(temp) == EZO_SUCCESS ? 0 : 1;
-      return rtd_calibrate(&(ezo_sensor_t){ .address = EZO_RTD_ADDR }, temp) == EZO_SUCCESS ? 0 : 1;
-    }
-    else if ( (strcasecmp(argv[2], "prs") == 0))
-    {
-      if (argc < 4)
-      {
-        fprintf(stderr, "Usage: %s calibrate prs <psi>\n", argv[0]);
-        return 1;
-      }
-      float temp = atof(argv[3]);
-      printf("Calibrating PRS sensor at %.2fpsi...\n", temp);
-      //return prs_calibrate(temp) == EZO_SUCCESS ? 0 : 1;
-      return prs_calibrate(&(ezo_sensor_t){ .address = EZO_PRS_ADDR }, temp) == EZO_SUCCESS ? 0 : 1;
-    }
-    else
-    {
-      fprintf(stderr, "Unknown calibration point '%s'\n", argv[2]);
-      fprintf(stderr, "Valid options: low, mid, high, orp <mv>, rtd <degC>\n");
+    float reading = ezo_calibrate_action(&args);
+    if (reading < 0.0) {
+      fprintf(stderr,"Error\n");
       return 1;
+    } else {
+      return 0;
     }
   }
 
@@ -798,7 +710,7 @@ reload_configuration:
             LOG(reading_log_level, "Using %s, %.2f for pH compensated reading", comp_reading_key->label, comp_reading_key->value);
             ph_reading = ph_get_reading_compensated(&key->data.ezo, comp_reading_key->value);
           } else {
-            LOG(LOG_WARNING, "EZO pH Sensor '%s' skipped compensation because temp is unknown\n", key->label);
+            LOG(LOG_WARNING, "EZO pH Sensor '%s' skipped, no temperature for compensated reading\n", key->label);
             set_key_state(&acddata, key, ACD_LED_OFF);
             break;
           }
@@ -861,7 +773,10 @@ reload_configuration:
             LOG(reading_log_level, "Using %s, %.2f for EC compensated reading", comp_reading_key->label, comp_reading_key->value);
             ec_reading = ec_get_reading_compensated(&key->data.ezo, comp_reading_key->value);
           } else {
-            LOG(LOG_WARNING, "No temperature for compensated EZO EC Sensor '%s', not reading\n", key->label);
+            LOG(LOG_WARNING, "EZO EC Sensor '%s' skipped, no temperature for compensated reading\n",key->label);
+            for (acd_key_t *child = key; child != NULL; child = child->child) {
+              set_key_state(&acddata, child, ACD_LED_OFF);
+            }
             break;   
           }
 

@@ -22,6 +22,7 @@
 #include "sensor_stats.h"
 #include "web_config.h"
 #include "version.h"
+#include "ezo_calibrate.h"
 
 
 static struct aquachemdata *_aquachemd_data;
@@ -77,6 +78,7 @@ bool write_systemd_logmessages_2file(char *fname, int lines);
     tolower((unsigned char)(str)[(len)-1]) == tolower((unsigned char)(SUFFIX)[3]) \
 )
 
+#define USE_DOSE_EVENT_QUEUE
 #ifdef USE_DOSE_EVENT_QUEUE
 
 #define DOSE_EVENT_MAX  3
@@ -118,17 +120,17 @@ bool pop_dosing_event(dose_event_t *out)
 {
     bool ok = false;
 
-    pthread_mutex_lock(&_dose_q_mutex);
     if (_dose_q.count > 0) {
+      pthread_mutex_lock(&_dose_q_mutex);
         *out = _dose_q.ev[0];
         _dose_q.count--;
         memmove(&_dose_q.ev[0], &_dose_q.ev[1],
                 _dose_q.count * sizeof(dose_event_t));
         memset(&_dose_q.ev[_dose_q.count], 0, sizeof(dose_event_t));
         ok = true;
+      pthread_mutex_unlock(&_dose_q_mutex);
     }
-    pthread_mutex_unlock(&_dose_q_mutex);
-
+    
     return ok;
 }
 
@@ -150,7 +152,7 @@ void reset_dose_event()
 }
 
 // if total_ml == -1, just update the runing total.
-void post_dosing_event(acd_key_t *key, uint32_t runtime, float total_ml)
+bool post_dosing_event(acd_key_t *key, uint32_t runtime, float total_ml)
 {
    // Store info and set flag for next run.
    
@@ -160,6 +162,7 @@ void post_dosing_event(acd_key_t *key, uint32_t runtime, float total_ml)
    
    _dose_event.is_dirty = true;
    //_aquachemd_data.is_dirty = true;
+   return true;
 }
 #endif // USE_DOSE_EVENT_QUEUE
 
@@ -254,109 +257,80 @@ void log_mg_str(int level, char *name, struct mg_str str) {
 
 bool process_sensor_request(char *buffer, size_t buf_size, char *ws_request, float calibrationValue, bool is_calibration)
 {
-  int cal_rtn=EZO_SUCCESS;
-  int read_rtn=EZO_SUCCESS;
-  float value = 0.0f;
+  float cal_rtn=EZO_ERROR;
+  float calibration_points=EZO_ERROR;
+  float reading_value=EZO_ERROR;
+  ezo_calibrate_t cal = {0};
+  char *cal_point = NULL;
+
   if (_aquachemd_data == NULL) {
     goto f_end;
   }
 
-  //LOG(LOG_ERR,"process_sensor_request() %s '%s'\n",is_calibration?"calibration":"reading", ws_request);
 
-  if (strcasecmp(ws_request, "cal_ph") == 0) {
-    ezo_sensor_t ph = { .address = EZO_PH_ADDR }; // Need to pass ADDR from UI in future
-    if (is_calibration) {
-      LOG(LOG_NOTICE, "Calibrating pH - %.2f",calibrationValue);
-      cal_rtn = ph_calibrate_by_value(&ph, calibrationValue);
-    }
-    if (cal_rtn == EZO_SUCCESS) {
-      LOG(LOG_NOTICE, "Reading pH");
-      ph_reading_t reading = ph_get_reading(&ph);
-      if (reading.status == EZO_SUCCESS){value=reading.value; LOG(LOG_NOTICE, "pH reading %.2f",value);}
-      else {LOG(LOG_ERR, "Failed to read pH sensor, status %d", reading.status);}
-      read_rtn = reading.status;
-    }
+  if (is_calibration) cal.action = EZO_ACTION_CALIBRATE; else cal.action = EZO_ACTION_READING;
+  cal.float_value = calibrationValue;
 
+  if (strcasecmp(ws_request, "cal_ph") == 0) { 
+    cal.device = EZO_PH;
+    switch(ph_get_calibration_point(calibrationValue)) {
+      case PH_CAL_LOW:  cal_point="Low";  break;
+      case PH_CAL_MID:  cal_point="Mid";  break;
+      case PH_CAL_HIGH: cal_point="High"; break;
+    }
   } else if (strcasecmp(ws_request, "cal_orp") == 0) {
-    ezo_sensor_t orp = { .address = EZO_ORP_ADDR }; // Need to pass ADDR from UI in future
-    if (is_calibration) {
-      LOG(LOG_NOTICE, "Calibrating ORP - %.2f",calibrationValue);
-      cal_rtn = orp_calibrate(&orp, calibrationValue);
-    }
-    if (cal_rtn == EZO_SUCCESS) {
-      LOG(LOG_NOTICE, "Reading ORP");
-      orp_reading_t reading = orp_get_reading(&orp);
-      if (reading.status == EZO_SUCCESS){value=reading.value; LOG(LOG_NOTICE, "ORP reading %.2f",value);}
-      else {LOG(LOG_ERR, "Failed to read ORP sensor, status %d", reading.status);}
-      read_rtn = reading.status;
-    }
-
+    cal.device = EZO_ORP;
   } else if (strcasecmp(ws_request, "cal_rtd") == 0) {
-    ezo_sensor_t rtd = { .address = EZO_RTD_ADDR }; // Need to pass ADDR from UI in future
-    
-    if (is_calibration) {
-      LOG(LOG_NOTICE, "Calibrating Temperature - %.2f",calibrationValue);
-      cal_rtn = rtd_calibrate(&rtd, calibrationValue);
-    }
-    if (cal_rtn == EZO_SUCCESS) {
-      LOG(LOG_NOTICE, "Reading Temperature");
-      rtd_reading_t reading = rtd_get_reading(&rtd);
-      if (reading.status == EZO_SUCCESS){value=reading.value; LOG(LOG_NOTICE, "Temperature reading %.2f",value);}
-      else {LOG(LOG_ERR, "Failed to read Temperature sensor, status %d", reading.status);}
-      read_rtn = reading.status;
-    }
-
+    cal.device = EZO_RTD;
   } else if (strcasecmp(ws_request, "cal_prs") == 0) {
-    ezo_sensor_t prs = { .address = EZO_PRS_ADDR }; // Need to pass ADDR from UI in future
-    
-    if (is_calibration) {
-      LOG(LOG_NOTICE, "Calibrating Pressure - %.2f",calibrationValue);
-      cal_rtn = prs_calibrate(&prs, calibrationValue);
-    }
-    if (cal_rtn == EZO_SUCCESS) {
-      LOG(LOG_NOTICE, "Reading Pressure");
-      prs_reading_t reading = prs_get_reading(&prs);
-      if (reading.status == EZO_SUCCESS){value=reading.value; LOG(LOG_NOTICE, "Pressure reading %.2f",value);}
-      else {LOG(LOG_ERR, "Failed to read Pressure sensor, status %d", reading.status);}
-      read_rtn = reading.status;
-    }
-  
+    cal.device = EZO_PRS;
   } else if (strcasecmp(ws_request, "cal_ec") == 0) {
-    ezo_sensor_t ec = { .address = EZO_EC_ADDR }; // Need to pass ADDR from UI in future
-    
-    if (is_calibration) {
-      if (calibrationValue <= 0) {
-        LOG(LOG_NOTICE, "Calibrating Conductivity - DRY");
-        cal_rtn = ec_calibrate_dry(&ec);
-      } else {
-        LOG(LOG_NOTICE, "Calibrating Conductivity - %.2f",calibrationValue);
-        cal_rtn = ec_calibrate(&ec, calibrationValue);
-      }
-    }
-    if (cal_rtn == EZO_SUCCESS) {
-      LOG(LOG_NOTICE, "Reading Conductivity");
-      ec_reading_t reading = ec_get_reading(&ec);
-      if (reading.status == EZO_SUCCESS){value=reading.conductivity; LOG(LOG_NOTICE, "Conductivity reading %.2f",value);}
-      else {LOG(LOG_ERR, "Failed to read Conductivity sensor, status %d", reading.status);}
-      read_rtn = reading.status;
+    cal.device = EZO_EC;
+    switch(ec_get_calibration_point(calibrationValue)) {
+      case EC_CAL_DRY:  cal_point="Dry";  break;
+      case EC_CAL_LOW:  cal_point="Low";  break;
+      case EC_CAL_HIGH: cal_point="High"; break;
     }
   }
+
+  if (cal.action == EZO_ACTION_CALIBRATE) {
+    cal_rtn = calibration_points = ezo_calibrate_action(&cal);
+    cal.action = EZO_ACTION_READING;
+    reading_value = ezo_calibrate_action(&cal);
+  } else {
+    cal_rtn = reading_value = ezo_calibrate_action(&cal);
+  }
+
 
   f_end:
 
-  if (cal_rtn != EZO_SUCCESS) {
-    snprintf(buffer,buf_size, "{\"type\":\"instant_sensor_message\",\"status\":\"error\",\"error\":\"%d\",\"error_msg\":\"error calibrating sensor\"}",cal_rtn);
+  if (cal_rtn == EZO_ERROR) {
+    snprintf(buffer,buf_size, "{\"type\":\"instant_sensor_message\",\"status\":\"error\",\"error\":\"%d\",\"error_msg\":\"error calibrating sensor\"}",(int)cal_rtn);
     return false;
-  } else if (read_rtn != EZO_SUCCESS) {
-    snprintf(buffer,buf_size, "{\"type\":\"instant_sensor_message\",\"status\":\"error\",\"error\":\"%d\",\"error_msg\":\"error reading sensor\"}",read_rtn);
-    return false;
-  } else {
-    snprintf(buffer,buf_size, "{\"type\":\"instant_sensor_message\",\"status\":\"ok\",\"request_type\":\"%s\",\"action_type\":\"%s\",\"value\":\"%.2f\"}",
-             ws_request,
-             is_calibration?"calibration":"reading",
-             value);
-    return true;
   }
+
+  int offset = snprintf(buffer, buf_size, 
+    "{\"type\":\"instant_sensor_message\",\"status\":\"ok\",\"request_type\":\"%s\",\"action_type\":\"%s\",\"action_point\":\"%s\"",
+    ws_request,
+    is_calibration ? "calibration" : "reading",
+    cal_point ? cal_point : "");
+
+  // Conditionally add calibration_points if > -1
+  if (calibration_points > -1.0f && offset > 0 && (size_t)offset < buf_size) {
+    offset += snprintf(buffer + offset, buf_size - offset, ",\"calibration_points\":\"%.0f\"", calibration_points);
+  }
+
+  // Conditionally add reading_value if > -1
+  if (reading_value > -1.0f && offset > 0 && (size_t)offset < buf_size) {
+    offset += snprintf(buffer + offset, buf_size - offset, ",\"reading_value\":\"%.2f\"", reading_value);
+  }
+
+  // Close the JSON object
+  if (offset > 0 && (size_t)offset < buf_size) {
+    snprintf(buffer + offset, buf_size - offset, "}");
+  }
+
+  return true;
 }
 
 
@@ -518,7 +492,7 @@ uriAtype action_URI(const char *URI, int uri_length, float value, bool convertTe
     return uDoseStats;
   } else if (strncmp(ri1, "calibrate", 9) == 0) {
     return uCalibrate;
-  } else if (strncmp(ri1, "instantreading", 9) == 0) {
+  } else if (strncmp(ri1, "instantreading", 14) == 0) {
     return uInstantReading;
   } else if (strncmp(ri1, "scan", 4) == 0 || strncmp(ri1, "deepscan", 8) == 0) {
     bool is_deep = (strncmp(ri1, "deepscan", 8) == 0);
@@ -1298,8 +1272,10 @@ void mqtt_broadcast_aquachemd_dose_event(struct mg_connection *nc)
   //char rt_topic[MQTT_PUB_TOPIC_SIZE];
   //char msg[11];
 
+  if (_dose_q.count <= 0) return;
+  
   LOG(LOG_INFO, "Broadcasting Aquachemd dose event to MQTT\n");
-
+  
 #ifdef USE_DOSE_EVENT_QUEUE
   dose_event_t ev;
   while (pop_dosing_event(&ev)) {
@@ -1482,7 +1458,7 @@ bool network_service(struct mg_mgr *mgr, struct aquachemdata *acdata) {
 
   
   // Start mDNS responder with hostname "mydevice" (resolves to mydevice.local)
-  if (!start_mdns(mgr, AQUACHEMD_SHORT_NAME, _acdconfig_.listen_address)) {
+  if (!start_mdns(mgr, _acdconfig_.mdns_name, _acdconfig_.listen_address)) {
     LOG(LOG_WARNING, "Failed to create mDNS responder '%s.local'\n",AQUACHEMD_SHORT_NAME);
     // non-fatal: the web server is already up
   } else {
@@ -1525,7 +1501,9 @@ void *net_services_thread( void *ptr )
   _netsrunstate.state = ACD_KEEPRUNNING;
   pthread_mutex_unlock(&_netsrunstate.mutex);
 
+#ifndef USE_DOSE_EVENT_QUEUE
   reset_dose_event();
+#endif
 
   if (!network_service(&_mgr, _aquachemd_data)) {
     //LOG(LOG_ERR, "Failed to start network services\n");
@@ -1568,12 +1546,16 @@ void *net_services_thread( void *ptr )
       //LOG(LOG_DEBUG, "No state change, not broadcasting\n");
     }
 
+#ifdef USE_DOSE_EVENT_QUEUE
+    mqtt_broadcast_aquachemd_dose_event(_mgr.conns);
+#else
     // Post any dose events
     if (_dose_event.is_dirty) {
       mqtt_broadcast_aquachemd_dose_event(_mgr.conns);
       CLEAR_DIRTY(_dose_event.is_dirty);
     }
-  
+#endif
+
 #ifdef USE_SYSTEMD
     // Update acdmanager if active.
     // Inside your continuous loop

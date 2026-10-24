@@ -13,6 +13,8 @@
 
 [HomeAssistant examples](#HomeAssistant)
 
+[How to customize web config](UI%20Config.md)
+
 ---
 
 

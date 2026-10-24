@@ -11,7 +11,7 @@ pthread_t get_net_services_id();
 
 void send_mqtt(struct mg_connection *nc, const char *toppic, const char *message);
 
-void post_dosing_event(acd_key_t *key, uint32_t runtime, float total_ml);
+bool post_dosing_event(acd_key_t *key, uint32_t runtime, float total_ml);
 
 #define URI_LEN 32
 

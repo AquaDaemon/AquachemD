@@ -29,6 +29,13 @@ const char* i2c_get_driver_name(i2c_sensor_type_t type)
   }
 }
 
+static const char *_I2C_BUS = I2C_GENERIC_BUS;
+
+void i2c_set_bus(const char *bus)
+{
+  _I2C_BUS = (bus != NULL) ? bus : I2C_GENERIC_BUS;
+}
+
 // ─── Real implementation ──────────────────────────────────────────────────────
 // All code in this block is compiled only when DUMMY_SENSORS is NOT defined.
 // To build with fake sensors: make dummy
@@ -61,13 +68,6 @@ int pte7300_validate_status(unsigned short raw_status);
 // i2c_open() issues is redundant for them.  It is harmless unless a kernel driver
 // has claimed the address (EBUSY), in which case the transfer is refused.
 
-
-static const char *_I2C_BUS = I2C_GENERIC_BUS;
-
-void i2c_set_bus(const char *bus)
-{
-  _I2C_BUS = (bus != NULL) ? bus : I2C_GENERIC_BUS;
-}
 
 int i2c_bus_available(const char *bus_path)
 {

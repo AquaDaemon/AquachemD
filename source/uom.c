@@ -60,7 +60,7 @@ static const uom_alias_map_t uom_parse_table[] = {
 
     // Conductivity
     { "µS/cm",       UOM_MICROSIEMENS_CM},
-    { "cm",          UOM_MICROSIEMENS_CM},
+    { "µS",          UOM_MICROSIEMENS_CM},
     { "ppm",         UOM_PPM },
     { "PSU",         UOM_PSU },    // Practical Salinity Unit
     
@@ -120,8 +120,8 @@ const char* uom_to_str(acd_uom_t uom) {
         case UOM_MILLILITERS:return "ml";
         case UOM_LITERS:     return "L";
         case UOM_GALLONS:    return "gal";
-        case UOM_MICROSIEMENS_CM:  return "µS/cm"; // This is correct but too long.
-        //case UOM_MICROSIEMENS_CM:  return "µS";
+        //case UOM_MICROSIEMENS_CM:  return "µS/cm"; // This is correct but too long.
+        case UOM_MICROSIEMENS_CM:  return "µS";
         case UOM_PPM:        return "ppm";
         case UOM_PSU:        return "PSU";
         case UOM_SPECIFIC_GRAVITY:return "SG";
