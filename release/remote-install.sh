@@ -6,7 +6,7 @@ set -o pipefail
 
 # Global Configurations & Ecosystem Constants
 BIN="aquachemd"
-REPO="https://api.github.com/repos/Aquadeamon/${BIN}"
+REPO="https://api.github.com/repos/Aquadaemon/${BIN}"
 INSTALLED_BINARY="/usr/local/bin/${BIN}"
 
 # Systemd Journal Message ID (Shared with C code)
