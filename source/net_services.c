@@ -271,20 +271,20 @@ bool process_sensor_request(char *buffer, size_t buf_size, char *ws_request, flo
   if (is_calibration) cal.action = EZO_ACTION_CALIBRATE; else cal.action = EZO_ACTION_READING;
   cal.float_value = calibrationValue;
 
-  if (strcasecmp(ws_request, "cal_ph") == 0) { 
+  if (strncasecmp(ws_request, "cal_ph", 6) == 0) {
     cal.device = EZO_PH;
     switch(ph_get_calibration_point(calibrationValue)) {
       case PH_CAL_LOW:  cal_point="Low";  break;
       case PH_CAL_MID:  cal_point="Mid";  break;
       case PH_CAL_HIGH: cal_point="High"; break;
     }
-  } else if (strcasecmp(ws_request, "cal_orp") == 0) {
+  } else if (strncasecmp(ws_request, "cal_orp", 7) == 0) {
     cal.device = EZO_ORP;
-  } else if (strcasecmp(ws_request, "cal_rtd") == 0) {
+  } else if (strncasecmp(ws_request, "cal_rtd", 7) == 0) {
     cal.device = EZO_RTD;
-  } else if (strcasecmp(ws_request, "cal_prs") == 0) {
+  } else if (strncasecmp(ws_request, "cal_prs", 7) == 0) {
     cal.device = EZO_PRS;
-  } else if (strcasecmp(ws_request, "cal_ec") == 0) {
+  } else if (strncasecmp(ws_request, "cal_ec", 6) == 0) {
     cal.device = EZO_EC;
     switch(ec_get_calibration_point(calibrationValue)) {
       case EC_CAL_DRY:  cal_point="Dry";  break;
