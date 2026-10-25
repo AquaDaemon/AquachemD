@@ -17,6 +17,8 @@
     --max-config-table-height: 730px;
     --aqualinkd-scale: 0.75;
     --aqualinkd-container: 265px;
+    --statusmsg-width: 265px;
+    /* Fixed width of the status label, deliberately NOT tied to the (resizable) iframe height */
     --aqualinkd-iframe: 350px;
     /* Seems backwards, but the way the iframe scales the iframe need to be the same amount bigger 350*0.75*/
     --grid-width: 300px;
@@ -77,6 +79,19 @@
             width: 133%;
             transform: scale(0.75); 
             transform-origin: 0 0;*/
+  }
+
+  /* Drag handle under the aqualinkd iframe (height only) */
+  .aqd-resize {
+    grid-column: 1 / -1;
+    height: 8px;
+    cursor: ns-resize;
+    background: #777;
+    touch-action: none;
+  }
+
+  .aqd-resize:hover {
+    background: #4CAAD9;
   }
 
   .commands {
@@ -159,7 +174,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     /*text-overflow: clip;*/
-    width: var(--aqualinkd-container);
+    width: var(--statusmsg-width);
     display: inline-block;
   }
 
@@ -318,6 +333,34 @@
     /*background-color: #f1f1f1;*/
     background-color: rgb(211, 211, 211, 211);
     font-size: 14px;
+  }
+
+  /* Nested (per-sensor) menus inside Calibration */
+  .collapsible.sub {
+    background-color: #999;
+    font-size: 14px;
+    padding-left: 18px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .cal-table {
+    width: 100%;
+    padding: 8px 0px;
+  }
+
+   .cal-table input[type=button] {
+    min-width: 0 !important;
+  }
+
+  .cal-actions {
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  .cal-actions input[type=button] {
+    min-width: 0;
+    width: 31%;
   }
 
   /* FOR CONFIG PUPUP */
@@ -639,10 +682,21 @@
         this.classList.toggle("active");
         var content = this.nextElementSibling;
         //console.log(content);
+        var delta;
         if(content.style.maxHeight) {
+          delta = -parseInt(content.style.maxHeight);
           content.style.maxHeight = null;
         } else {
           content.style.maxHeight = content.scrollHeight + "px";
+          delta = content.scrollHeight;
+        }
+        // Nested menu: grow/shrink every enclosing expanded .content to match
+        var parent = content.parentElement ? content.parentElement.closest(".content") : null;
+        while(parent) {
+          if(parent.style.maxHeight) {
+            parent.style.maxHeight = (parseInt(parent.style.maxHeight) + delta) + "px";
+          }
+          parent = parent.parentElement ? parent.parentElement.closest(".content") : null;
         }
       });
     }
@@ -923,34 +977,16 @@
   }
 
 
-  function update_devices(data) {
-
-    if (data?.devices?.AquachemD?.int_status == 0) { // Must be off
-        document.getElementById("calibration_overlay").classList.add("hide");
-        enablebutton("cal_ph");
-        enablebutton("cal_ph_val");
-        enablebutton("cal_orp");
-        enablebutton("cal_orp_val");
-        enablebutton("cal_rtd");
-        enablebutton("cal_rtd_val");
-        enablebutton("cal_prs");
-        enablebutton("cal_prs_val");
-        enablebutton("cal_ec");
-        enablebutton("cal_ec_val");
-        
-    } else {
-        document.getElementById("calibration_overlay").classList.remove("hide");
-        disablebutton("cal_ph");
-        disablebutton("cal_ph_val");
-        disablebutton("cal_orp");
-        disablebutton("cal_orp_val");
-        disablebutton("cal_rtd");
-        disablebutton("cal_rtd_val");
-        disablebutton("cal_prs");
-        disablebutton("cal_prs_val"); 
-        disablebutton("cal_ec");
-        disablebutton("cal_ec_val"); 
-    }
+  function update_calibration_availability(data) {
+    // Calibration is only allowed while AquachemD is off (int_status == 0).
+    // Applies to EVERY input in the calibration table (calibrate buttons, value boxes,
+    // download/upload/clear), so new sensors/buttons need no changes here
+    // (they just need an id, which the helpers look up).
+    var cal_allowed = (data?.devices?.AquachemD?.int_status == 0);
+    document.getElementById("calibration_overlay").classList.toggle("hide", cal_allowed);
+    document.querySelectorAll("#calibration_table input:not([type=file])").forEach(function(el) {
+      if (cal_allowed) enablebutton(el.id); else disablebutton(el.id);
+    });
   }
 
   function update_status(data) {
@@ -1051,31 +1087,38 @@
     } else if (context == null && data != null) {
       // This is 2nd call we dor data from instant reading, so can calibrate.
       dlg_msg = document.getElementById("alertDialogMessage");
+
+      console.log("Attribute="+aqdAlert_getAttr());
       /*
         {"type":"instant_sensor_message","status":"ok","request_type":"cal_ph_low","action_type":"reading","value":"7.24"}
       */
       switch(data.request_type) {
         case "cal_ph":
+        case "cal_ph_reading":
           val = document.getElementById("cal_ph_val")?.value;
           text = "pH "+data?.action_point.toUpperCase()+" to "+ val;
           uom = "";
           break;
         case "cal_orp":
+        case "cal_orp_reading":
           val = document.getElementById("cal_orp_val")?.value;
           text = "ORP to "+ val +"mV";
           uom = "mV";
           break;
         case "cal_rtd":
+        case "cal_rtd_reading":
           val = document.getElementById("cal_rtd_val")?.value;
           text = "Temperature to "+ val +"&deg;C";
           uom = "&deg;C";
           break;
         case "cal_prs":
+        case "cal_prs_reading":
           val = document.getElementById("cal_prs_val")?.value;
           text = "Pressure to "+ val +"psi";
           uom = "psi";
           break;
         case "cal_ec":
+        case "cal_ec_reading":
           val = Number(document.getElementById("cal_ec_val")?.value);
           text = "Conductivity "+data?.action_point.toUpperCase()+" to "+ val;
           uom = "µS";
@@ -1084,31 +1127,42 @@
           text = "Unknown";
           break;
       }
+
       dlg_msg.innerHTML = "Current Reading "+data.reading_value+uom;
-      dlg_msg.innerHTML += '<hr>';
-      dlg_msg.innerHTML += '<br><input type="button" id="calibrate_probe" data-type='+data.request_type+' data-value='+val+' onclick="send(this);this.remove();" value="Calibrate '+text+'"/>';
-      dlg_msg.innerHTML += '<br><br>This will calibrate your probe to the above setings' 
+      if (aqdAlert_getAttr().endsWith("_reading")) {
+        // Just a reading, don;t do any more.
+      } else {
+        dlg_msg.innerHTML += '<hr>';
+        // Calibration where first request was reading, so show the actual calibrate now.
+        dlg_msg.innerHTML += '<br><input type="button" id="calibrate_probe" data-type='+data.request_type+' data-value='+val+' onclick="send(this);this.remove();" value="Calibrate '+text+'"/>';
+        dlg_msg.innerHTML += '<br><br>This will calibrate your probe to the above setings' 
+      }
       
       return;
     }
 
     // This is 1st call, so request an instant reading.
-    aqdAlert("Calibrate "+context.id);
+    aqdAlert("Calibrate "+context.id, context.id);
 
     switch(context.id) {
         case "cal_ph":
+        case "cal_ph_reading":
           val = document.getElementById("cal_ph_val")?.value;
           break;
         case "cal_orp":
+        case "cal_orp_reading":
           val = document.getElementById("cal_orp_val")?.value;
           break;
         case "cal_rtd":
+        case "cal_rtd_reading":
           val = document.getElementById("cal_rtd_val")?.value;
           break;
         case "cal_prs":
+        case "cal_prs_reading":
           val = document.getElementById("cal_prs_val")?.value;
           break;
         case "cal_ec":
+        case "cal_ec_reading":
           val = document.getElementById("cal_ec_val")?.value;
           break;
     }
@@ -1656,7 +1710,7 @@ function startWebsockets() {
       else if(data.type == 'status') update_status(data);
       else if(data.type == 'config_schema') showConfig(data);
       else if(data.type == 'dose_history') showDoseHistory(data);
-      else if(data.type == 'devices') update_devices(data);
+      else if(data.type == 'devices') update_calibration_availability(data);
       else if(data.type == 'instant_sensor_message') calibration(null, data);
       else if (isJsonErrorMessage(data)) {
         show_error_in_log_console("Received message '" + data.error + "' from server");
@@ -2062,11 +2116,17 @@ function startWebsockets() {
   }
 
 
-  function aqdAlert(message) {
+  function aqdAlert(message, custom_attribute=null) {
+    console.log("message="+message);
     document.getElementById("alertDialogHeader").innerText = '';
     document.getElementById('alertDialogMessage').innerText = message;
     document.getElementById('alertOverlay').style.display = 'block';
     document.getElementById('alertCustomDialog').style.display = 'block';
+    if (custom_attribute) { document.getElementById('alertCustomDialog').setAttribute('custom_data', custom_attribute); }
+  }
+
+  function aqdAlert_getAttr() {
+    return document.getElementById('alertCustomDialog').getAttribute('custom_data');
   }
 
   function aqdAlertClose() {
@@ -2326,18 +2386,78 @@ function update_ec_calibration_units(input) {
         : '';
 }
 
+// Drag the bar under the aqualinkd iframe to change its height.
+function init_aqd_resize() {
+    const handle = document.getElementById('aqd_resize');
+    const root = document.documentElement;
+    const scale = parseFloat(getComputedStyle(root).getPropertyValue('--aqualinkd-scale')) || 1;
+    let startY, startContainer, startLog;
+
+    handle.addEventListener('pointerdown', function(e) {
+        handle.setPointerCapture(e.pointerId); // keeps events coming even over the iframe
+        startY = e.clientY;
+        startContainer = parseFloat(getComputedStyle(root).getPropertyValue('--aqualinkd-container'));
+        startLog = parseFloat(getComputedStyle(root).getPropertyValue('--logcontainer-height'));
+        e.preventDefault();
+    });
+
+    handle.addEventListener('pointermove', function(e) {
+        if (!handle.hasPointerCapture(e.pointerId)) return;
+        const container = Math.max(60, startContainer + (e.clientY - startY));
+        root.style.setProperty('--aqualinkd-container', container + 'px');
+        root.style.setProperty('--aqualinkd-iframe', (container / scale) + 'px');
+        // keep the log pane filling the rest of the window
+        root.style.setProperty('--logcontainer-height', Math.max(100, startLog - (container - startContainer)) + 'px');
+    });
+}
+
+// Per-sensor calibration file actions (download / upload / clear).
+// TODO: wire these to the backend once the URIs are decided.
+var _cal_upload_sensor = null;
+
+function calibration_file_action(button) {
+    const sensor = button.dataset.sensor;
+    switch (button.dataset.action) {
+        case "download":
+            // TODO: request calibration for 'sensor' and save as a file
+            aqdAlert("Download " + sensor + " calibration: not implemented yet");
+            break;
+        case "upload":
+            _cal_upload_sensor = sensor;
+            //document.getElementById("cal_upload_file").click(); // This open up select file dialog
+            aqdAlert("Upload " + sensor + " calibration: not implemented yet");
+            break;
+        case "clear":
+            // TODO: send a clear-calibration command for 'sensor'
+            aqdAlert("Clear " + sensor + " calibration: not implemented yet");
+            
+            break;
+    }
+}
+
+function calibration_file_selected(input) {
+    const file = input.files[0];
+    if (file && _cal_upload_sensor) {
+        // TODO: send file contents to the backend for _cal_upload_sensor
+        aqdAlert("Upload " + _cal_upload_sensor + " calibration (" + file.name + "): not implemented yet");
+    }
+    input.value = "";
+    _cal_upload_sensor = null;
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     update_ec_calibration_units(document.getElementById('cal_ec_val'));
 });
 
 </script>
 
-<body onload="init();init_collapsible();">
+<body onload="init();init_collapsible();init_aqd_resize();">
   <div class="wrapper">
     <div class="aqualinkd">
       <!--<iframe id="aqd" class="aqd_iframe" src="/" width="100%" height="350px"></iframe>-->
       <iframe id="aqd" class="aqualinkd_iframe" src="/"></iframe>
     </div>
+    <div id="aqd_resize" class="aqd-resize" title="Drag to resize"></div>
     <div class="inner">
       <div class="commands">
         <table border='0' id="deviceList" style="width: 100%;">
@@ -2429,48 +2549,122 @@ document.addEventListener('DOMContentLoaded', function() {
          <div class="content restrictable-area" id="calibration">
          <!-- <div class="content" id="calibration">-->
           <div id="calibration_table" style="width: 100%;">
-           <table border='0' style="width: 100%; table-layout: fixed;">
-            <tr>
-              <td align="center">
-                <input id="cal_ph" type="button" onclick="calibration(this);" value="pH"></input>
-              </td>
-              <td align="left">
-                 <input id="cal_ph_val" type="text" value="0" size="5"> pH</input>
-              </td>
-              
-              <tr>
-              <td align="center">
-                <input id="cal_orp" type="button" onclick="calibration(this);" value="ORP"></input>
-              </td>
-              <td align="left">
-                 <input id="cal_orp_val" type="text" value="0" size="5"> mV</input>
-              
-              <tr>
-              <td align="center">
-                <input id="cal_rtd" type="button" onclick="calibration(this);" value="Temperature"></input>
-              </td>
-              <td align="left">
-                <input id="cal_rtd_val" type="text" value="0" size="5"> &deg;C</input>
-              </td>
-             
-              <tr>
-              <td align="center">
-                <input id="cal_prs" type="button" onclick="calibration(this);" value="Pressure"></input>
-              </td>
-              <td align="left">
-                <input id="cal_prs_val" type="text" value="0" size="5"> psi</input>
-              </td>
-
-              <tr>
-              <td align="center">
-                <input id="cal_ec" type="button" onclick="calibration(this);" value="Conductivity"></input>
-              </td>
-              <td align="left">
-                <input id="cal_ec_val" type="text" value="0" size="5" oninput="update_ec_calibration_units(this)"><span id="cal_ec_units"> (dry)</span>
-              </td>
-              
-            </tr>
-           </table>
+            <button class="collapsible sub">pH</button>
+            <div class="content" id="cal_ph_menu">
+              <table border="0" class="cal-table">
+                <tr>
+                  <td align="left">
+                    <input id="cal_ph_reading" type="button" data-sensor="ph" data-action="Read" onclick="calibration(this);" value="Read"></input>      
+                  </td>
+                  <td align="right">
+                    <input id="cal_ph" type="button" onclick="calibration(this);" value="Calibrate pH"></input>
+                  </td>
+                  <td align="left">
+                    <input id="cal_ph_val" type="text" value="0" size="4"> pH
+                  </td>
+                </tr>
+                <tr>
+                  <td colspan="3" class="cal-actions">
+                    <input id="cal_ph_download" type="button" data-sensor="ph" data-action="download" onclick="calibration_file_action(this);" value="Download"></input>
+                    <input id="cal_ph_upload" type="button" data-sensor="ph" data-action="upload" onclick="calibration_file_action(this);" value="Upload"></input>
+                    <input id="cal_ph_clear" type="button" data-sensor="ph" data-action="clear" onclick="calibration_file_action(this);" value="Clear"></input>
+                  </td>
+                </tr>
+              </table>
+            </div>
+            <button class="collapsible sub">ORP</button>
+            <div class="content" id="cal_orp_menu">
+              <table border="0" class="cal-table">
+                <tr>
+                  <td align="left">
+                    <input id="cal_orp_reading" type="button" data-sensor="orp" data-action="Read" onclick="calibration(this);" value="Read"></input>      
+                  </td>
+                  <td align="right">
+                    <input id="cal_orp" type="button" onclick="calibration(this);" value="Calibrate ORP"></input>
+                  </td>
+                  <td align="left">
+                    <input id="cal_orp_val" type="text" value="0" size="4"> mV
+                  </td>
+                </tr>
+                <tr>
+                  <td colspan="3" class="cal-actions">
+                    <input id="cal_orp_download" type="button" data-sensor="orp" data-action="download" onclick="calibration_file_action(this);" value="Download"></input>
+                    <input id="cal_orp_upload" type="button" data-sensor="orp" data-action="upload" onclick="calibration_file_action(this);" value="Upload"></input>
+                    <input id="cal_orp_clear" type="button" data-sensor="orp" data-action="clear" onclick="calibration_file_action(this);" value="Clear"></input>
+                  </td>
+                </tr>
+              </table>
+            </div>
+            <button class="collapsible sub">Temperature</button>
+            <div class="content" id="cal_rtd_menu">
+              <table border="0" class="cal-table">
+                <tr>
+                  <td align="left">
+                    <input id="cal_rtd_reading" type="button" data-sensor="rtd" data-action="Read" onclick="calibration(this);" value="Read"></input>      
+                  </td>
+                  <td align="right">
+                    <input id="cal_rtd" type="button" onclick="calibration(this);" value="Calibrate Temperature"></input>
+                  </td>
+                  <td align="left">
+                    <input id="cal_rtd_val" type="text" value="0" size="4"> &deg;C
+                  </td>
+                </tr>
+                <tr>
+                  <td colspan="3" class="cal-actions">
+                    <input id="cal_rtd_download" type="button" data-sensor="rtd" data-action="download" onclick="calibration_file_action(this);" value="Download"></input>
+                    <input id="cal_rtd_upload" type="button" data-sensor="rtd" data-action="upload" onclick="calibration_file_action(this);" value="Upload"></input>
+                    <input id="cal_rtd_clear" type="button" data-sensor="rtd" data-action="clear" onclick="calibration_file_action(this);" value="Clear"></input>
+                  </td>
+                </tr>
+              </table>
+            </div>
+            <button class="collapsible sub">Pressure</button>
+            <div class="content" id="cal_prs_menu">
+              <table border="0" class="cal-table">
+                <tr>
+                  <td align="left">
+                    <input id="cal_prs_reading" type="button" data-sensor="prs" data-action="Read" onclick="calibration(this);" value="Read"></input>      
+                  </td>
+                  <td align="right">
+                    <input id="cal_prs" type="button" onclick="calibration(this);" value="Calibrate Pressure"></input>
+                  </td>
+                  <td align="left">
+                    <input id="cal_prs_val" type="text" value="0" size="4"> psi
+                  </td>
+                </tr>
+                <tr>
+                  <td colspan="3" class="cal-actions">
+                    <input id="cal_prs_download" type="button" data-sensor="prs" data-action="download" onclick="calibration_file_action(this);" value="Download"></input>
+                    <input id="cal_prs_upload" type="button" data-sensor="prs" data-action="upload" onclick="calibration_file_action(this);" value="Upload"></input>
+                    <input id="cal_prs_clear" type="button" data-sensor="prs" data-action="clear" onclick="calibration_file_action(this);" value="Clear"></input>
+                  </td>
+                </tr>
+              </table>
+            </div>
+            <button class="collapsible sub">Conductivity</button>
+            <div class="content" id="cal_ec_menu">
+              <table border="0" class="cal-table">
+                <tr>
+                  <td align="left">
+                    <input id="cal_ec_reading" type="button" data-sensor="ec" data-action="Read" onclick="calibration(this);" value="Read"></input>      
+                  </td>
+                  <td align="right">
+                    <input id="cal_ec" type="button" onclick="calibration(this);" value="Calibrate Conductivity"></input>
+                  </td>
+                  <td align="left">
+                    <input id="cal_ec_val" type="text" value="0" size="4" oninput="update_ec_calibration_units(this)"><span id="cal_ec_units"> (dry)</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td colspan="3" class="cal-actions">
+                    <input id="cal_ec_download" type="button" data-sensor="ec" data-action="download" onclick="calibration_file_action(this);" value="Download"></input>
+                    <input id="cal_ec_upload" type="button" data-sensor="ec" data-action="upload" onclick="calibration_file_action(this);" value="Upload"></input>
+                    <input id="cal_ec_clear" type="button" data-sensor="ec" data-action="clear" onclick="calibration_file_action(this);" value="Clear"></input>
+                  </td>
+                </tr>
+              </table>
+            </div>
+            <input type="file" id="cal_upload_file" style="display:none" onchange="calibration_file_selected(this);"></input>
           </div>
           <div id="calibration_overlay" class="area-restricted">
             Calibration Disabled<br>Turn off AquachemD to enable
